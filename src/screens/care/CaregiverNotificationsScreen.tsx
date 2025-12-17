@@ -1,5 +1,5 @@
 // src/screens/care/CaregiverNotificationsScreen.tsx
-// ✅ REFACTORIZADA: Solo UI, lógica en hooks y servicios
+
 
 import React from "react";
 import {
@@ -16,7 +16,7 @@ import { COLORS, FONT_SIZES } from "../../../types";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../navigation/StackNavigator";
 
-// 🎯 Hook personalizado con toda la lógica
+//  Hook personalizado con toda la lógica
 import { useCaregiverNotifications } from "../../hooks/useCaregiverHooks";
 import {
   getSeverityColor,
@@ -31,7 +31,7 @@ interface Props {
 }
 
 export default function CaregiverNotificationsScreen({ navigation }: Props) {
-  // 🎯 Toda la lógica viene del hook
+
   const {
     notifications,
     loading,
@@ -41,9 +41,7 @@ export default function CaregiverNotificationsScreen({ navigation }: Props) {
     markAsRead,
   } = useCaregiverNotifications();
 
-  /* =========================================
-   *           🎨 RENDER HELPERS
-   * ========================================= */
+
 
   const renderNotification = (notif: CareNotification) => {
     const severityColor = getSeverityColor(notif.severity);
@@ -111,9 +109,7 @@ export default function CaregiverNotificationsScreen({ navigation }: Props) {
     <Text style={styles.emptyText}>Cargando notificaciones...</Text>
   );
 
-  /* =========================================
-   *              🎨 RENDER MAIN
-   * ========================================= */
+
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -163,9 +159,7 @@ export default function CaregiverNotificationsScreen({ navigation }: Props) {
   );
 }
 
-/* =========================================
- *              🎨 STYLES
- * ========================================= */
+
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },

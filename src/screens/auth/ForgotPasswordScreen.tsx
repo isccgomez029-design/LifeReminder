@@ -71,7 +71,7 @@ export default function ForgotPasswordScreen({
         ]
       );
     } catch (e: any) {
-      console.log("Error al enviar reset:", e);
+
       const code = e?.code ?? "";
       let msg = "Ocurrió un error al enviar el correo. Intenta de nuevo.";
 

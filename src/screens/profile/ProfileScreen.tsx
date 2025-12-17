@@ -1,7 +1,6 @@
 // src/screens/profile/ProfileScreen.tsx
-// ✅ CORREGIDO: Soporte offline completo con offlineAuthService
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -9,335 +8,81 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
   ScrollView,
   Image,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import * as ImagePicker from "expo-image-picker";
 import { MaterialIcons } from "@expo/vector-icons";
 
-// Firebase
-import { auth, db } from "../../config/firebaseConfig";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import {
-  EmailAuthProvider,
-  reauthenticateWithCredential,
-  updateEmail,
-  updatePassword,
-} from "firebase/auth";
+import { useProfile } from "../../hooks/useProfile";
 
-// ✅ Servicios offline
-import { syncQueueService } from "../../services/offline/SyncQueueService";
-import { offlineAuthService } from "../../services/offline/OfflineAuthService";
+import { useIsOnline } from "../../context/OfflineContext";
 
 const ProfileScreen: React.FC = () => {
-  const [displayName, setDisplayName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [age, setAge] = useState("");
-  const [allergies, setAllergies] = useState("");
-  const [conditions, setConditions] = useState("");
-  const [photoUri, setPhotoUri] = useState<string | null>(null);
+  const isOnline = useIsOnline();
 
-  const [emergencyName, setEmergencyName] = useState("");
-  const [emergencyRelation, setEmergencyRelation] = useState("");
-  const [emergencyPhone, setEmergencyPhone] = useState("");
+  const {
+    firebaseUser,
+    userId,
+    userEmail,
 
-  const [bloodType, setBloodType] = useState("");
-  const [emergencyNotes, setEmergencyNotes] = useState("");
+    displayName,
+    setDisplayName,
+    phone,
+    setPhone,
+    age,
+    setAge,
+    allergies,
+    setAllergies,
+    conditions,
+    setConditions,
+    photoUri,
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+    emergencyName,
+    setEmergencyName,
+    emergencyRelation,
+    setEmergencyRelation,
+    emergencyPhone,
+    setEmergencyPhone,
 
-  const [showEmailForm, setShowEmailForm] = useState(false);
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
+    bloodType,
+    setBloodType,
+    emergencyNotes,
+    setEmergencyNotes,
 
-  const [newEmail, setNewEmail] = useState("");
-  const [emailPassword, setEmailPassword] = useState("");
-  const [processingEmail, setProcessingEmail] = useState(false);
+    loading,
+    saving,
+    isEditing,
 
-  const [currentPass, setCurrentPass] = useState("");
-  const [newPass, setNewPass] = useState("");
-  const [confirmPass, setConfirmPass] = useState("");
-  const [processingPass, setProcessingPass] = useState(false);
+    showEmailForm,
+    setShowEmailForm,
+    showPasswordForm,
+    setShowPasswordForm,
 
-  // ✅ CORREGIDO: Obtener usuario de Firebase O del servicio offline
-  const firebaseUser = auth.currentUser;
-  const offlineUser = offlineAuthService.getCurrentUser();
-  const userId = firebaseUser?.uid || offlineAuthService.getCurrentUid();
-  const userEmail = firebaseUser?.email || offlineUser?.email || "";
+    newEmail,
+    setNewEmail,
+    emailPassword,
+    setEmailPassword,
+    processingEmail,
 
-  useEffect(() => {
-    const loadProfile = async () => {
-      try {
-        if (!userId) {
-          console.log("⚠️ No hay usuario autenticado (online ni offline)");
-          setLoading(false);
-          return;
-        }
+    currentPass,
+    setCurrentPass,
+    newPass,
+    setNewPass,
+    confirmPass,
+    setConfirmPass,
+    processingPass,
 
-        let data: any | null = null;
+    toggleEdit,
+    handlePickFromGallery,
+    handleTakePhoto,
+    handleSave,
+    handleChangeEmail,
+    handleChangePassword,
+  } = useProfile();
 
-        // 1) Intentar leer del cache local
-        try {
-          const cached = await syncQueueService.getFromCache("profile", userId);
-          if (cached?.data && cached.data.length > 0) {
-            data = cached.data[0];
-            console.log("✅ Perfil cargado desde cache local");
-          }
-        } catch (e) {
-          console.log("⚠️ Error leyendo perfil local:", e);
-        }
-
-        // 2) Intentar refrescar desde Firestore
-        try {
-          const userRef = doc(db, "users", userId);
-          const snap = await getDoc(userRef);
-
-          if (snap.exists()) {
-            data = snap.data();
-            console.log("✅ Perfil actualizado desde Firestore");
-            await syncQueueService.saveToCache("profile", userId, [
-              { id: userId, ...data },
-            ]);
-          }
-        } catch (e) {
-          console.log("⚠️ Sin conexión, usando datos locales");
-        }
-
-        if (data) {
-          setDisplayName(
-            data.displayName ||
-              firebaseUser?.displayName ||
-              offlineUser?.displayName ||
-              ""
-          );
-          setPhone(data.phone || "");
-          setAge(data.age ? String(data.age) : "");
-          setAllergies(data.allergies || "");
-          setConditions(data.conditions || "");
-          setPhotoUri(data.photoUri || null);
-          setEmergencyName(data.emergencyContactName || "");
-          setEmergencyRelation(data.emergencyContactRelation || "");
-          setEmergencyPhone(data.emergencyContactPhone || "");
-          setBloodType(data.bloodType || "");
-          setEmergencyNotes(data.emergencyNotes || "");
-        } else {
-          setDisplayName(
-            firebaseUser?.displayName || offlineUser?.displayName || ""
-          );
-        }
-      } catch (error) {
-        console.error("❌ Error cargando perfil:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadProfile();
-  }, [userId]);
-
-  const handlePickFromGallery = async () => {
-    try {
-      const { status } =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permiso requerido",
-          "Necesitas permitir el acceso a la galería."
-        );
-        return;
-      }
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
-      });
-      if (!result.canceled && result.assets?.[0]) {
-        setPhotoUri(result.assets[0].uri);
-      }
-    } catch (error) {
-      console.error("Error al elegir de galería:", error);
-    }
-  };
-
-  const handleTakePhoto = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert(
-          "Permiso requerido",
-          "Necesitas permitir el acceso a la cámara."
-        );
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.7,
-      });
-      if (!result.canceled && result.assets?.[0]) {
-        setPhotoUri(result.assets[0].uri);
-      }
-    } catch (error) {
-      console.error("Error al tomar foto:", error);
-    }
-  };
-
-  const handleSave = async () => {
-    if (!userId) {
-      Alert.alert("Error", "No hay usuario autenticado.");
-      return;
-    }
-    if (!displayName.trim()) {
-      Alert.alert("Validación", "El nombre no puede estar vacío.");
-      return;
-    }
-
-    let parsedAge: number | null = null;
-    if (age.trim()) {
-      const n = Number(age.trim());
-      if (Number.isNaN(n) || n <= 0) {
-        Alert.alert("Validación", "La edad debe ser un número mayor a 0.");
-        return;
-      }
-      parsedAge = n;
-    }
-
-    const profileData = {
-      id: userId,
-      displayName: displayName.trim(),
-      phone: phone.trim(),
-      email: userEmail,
-      age: parsedAge,
-      allergies: allergies.trim(),
-      conditions: conditions.trim(),
-      photoUri: photoUri || null,
-      emergencyContactName: emergencyName.trim(),
-      emergencyContactRelation: emergencyRelation.trim(),
-      emergencyContactPhone: emergencyPhone.trim(),
-      bloodType: bloodType.trim(),
-      emergencyNotes: emergencyNotes.trim(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    try {
-      setSaving(true);
-      await syncQueueService.enqueue(
-        "UPDATE",
-        "profile",
-        userId,
-        userId,
-        profileData
-      );
-
-      try {
-        const userRef = doc(db, "users", userId);
-        await setDoc(userRef, profileData, { merge: true });
-      } catch (syncError) {
-        console.log("⚠️ Se sincronizará cuando haya conexión");
-      }
-
-      Alert.alert("Listo", "Perfil actualizado correctamente.");
-      setIsEditing(false);
-    } catch (error) {
-      console.error("❌ Error guardando perfil:", error);
-      Alert.alert("Error", "No se pudieron guardar los cambios.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const toggleEdit = () => setIsEditing((prev) => !prev);
-
-  const handleChangeEmail = async () => {
-    if (!firebaseUser || !firebaseUser.email) {
-      Alert.alert("Error", "Esta función requiere conexión a internet.");
-      return;
-    }
-    const trimmedEmail = newEmail.trim();
-    if (!trimmedEmail || !trimmedEmail.includes("@")) {
-      Alert.alert("Validación", "Escribe un correo válido.");
-      return;
-    }
-    if (!emailPassword.trim()) {
-      Alert.alert("Validación", "Escribe tu contraseña actual.");
-      return;
-    }
-
-    try {
-      setProcessingEmail(true);
-      const cred = EmailAuthProvider.credential(
-        firebaseUser.email,
-        emailPassword
-      );
-      await reauthenticateWithCredential(firebaseUser, cred);
-      await updateEmail(firebaseUser, trimmedEmail);
-      const userRef = doc(db, "users", firebaseUser.uid);
-      await setDoc(
-        userRef,
-        { email: trimmedEmail, updatedAt: new Date().toISOString() },
-        { merge: true }
-      );
-      Alert.alert("Listo", "Correo actualizado correctamente.");
-      setShowEmailForm(false);
-      setNewEmail("");
-      setEmailPassword("");
-    } catch (error: any) {
-      Alert.alert(
-        "Error",
-        `No se pudo cambiar el correo.\n\nCódigo: ${
-          error?.code ?? "desconocido"
-        }`
-      );
-    } finally {
-      setProcessingEmail(false);
-    }
-  };
-
-  const handleChangePassword = async () => {
-    if (!firebaseUser || !firebaseUser.email) {
-      Alert.alert("Error", "Esta función requiere conexión a internet.");
-      return;
-    }
-    if (!currentPass.trim() || !newPass.trim() || newPass.length < 6) {
-      Alert.alert(
-        "Validación",
-        "La nueva contraseña debe tener al menos 6 caracteres."
-      );
-      return;
-    }
-    if (newPass !== confirmPass) {
-      Alert.alert("Validación", "Las contraseñas no coinciden.");
-      return;
-    }
-
-    try {
-      setProcessingPass(true);
-      const cred = EmailAuthProvider.credential(
-        firebaseUser.email,
-        currentPass
-      );
-      await reauthenticateWithCredential(firebaseUser, cred);
-      await updatePassword(firebaseUser, newPass);
-      Alert.alert("Listo", "Contraseña actualizada correctamente.");
-      setShowPasswordForm(false);
-      setCurrentPass("");
-      setNewPass("");
-      setConfirmPass("");
-    } catch (error: any) {
-      Alert.alert(
-        "Error",
-        `No se pudo cambiar la contraseña.\n\nCódigo: ${
-          error?.code ?? "desconocido"
-        }`
-      );
-    } finally {
-      setProcessingPass(false);
-    }
-  };
+  const canUseOnlineSecurity = !!firebaseUser && isOnline;
 
   if (loading) {
     return (
@@ -435,23 +180,54 @@ const ProfileScreen: React.FC = () => {
             </Text>
           </View>
 
+          {/* Seguridad */}
           {firebaseUser && (
             <View style={styles.securityBlock}>
               <Text style={styles.sectionTitle}>Seguridad de la cuenta</Text>
+
+              {!isOnline && (
+                <View style={styles.offlineBanner}>
+                  <MaterialIcons name="wifi-off" size={16} color="#6b7280" />
+                  <Text style={styles.offlineBannerText}>
+                    Sin internet: cambiar correo/contraseña está deshabilitado
+                  </Text>
+                </View>
+              )}
+
+              {/* Cambiar correo */}
               <TouchableOpacity
-                style={styles.inlineButton}
-                onPress={() => setShowEmailForm((prev) => !prev)}
+                style={[
+                  styles.inlineButton,
+                  !canUseOnlineSecurity && styles.disabledButton,
+                ]}
+                disabled={!canUseOnlineSecurity}
+                onPress={() => {
+                  if (!canUseOnlineSecurity) {
+                    Alert.alert(
+                      "Sin conexión",
+                      "Para cambiar tu correo necesitas conexión a internet."
+                    );
+                    return;
+                  }
+                  setShowEmailForm((prev) => !prev);
+                }}
               >
                 <MaterialIcons
                   name="alternate-email"
                   size={18}
-                  color="#007bff"
+                  color={canUseOnlineSecurity ? "#007bff" : "#9ca3af"}
                   style={{ marginRight: 6 }}
                 />
-                <Text style={styles.inlineButtonText}>
+                <Text
+                  style={[
+                    styles.inlineButtonText,
+                    !canUseOnlineSecurity && styles.inlineButtonTextDisabled,
+                  ]}
+                >
                   {showEmailForm ? "Cancelar" : "Cambiar correo"}
                 </Text>
               </TouchableOpacity>
+
               {showEmailForm && (
                 <View style={styles.securityCard}>
                   <Text style={styles.label}>Nuevo correo</Text>
@@ -462,6 +238,7 @@ const ProfileScreen: React.FC = () => {
                     placeholder="nuevo@correo.com"
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    editable={isOnline && !processingEmail}
                   />
                   <Text style={[styles.label, { marginTop: 8 }]}>
                     Contraseña actual
@@ -472,14 +249,15 @@ const ProfileScreen: React.FC = () => {
                     onChangeText={setEmailPassword}
                     placeholder="Contraseña"
                     secureTextEntry
+                    editable={isOnline && !processingEmail}
                   />
                   <TouchableOpacity
                     style={[
                       styles.saveButtonSmall,
-                      processingEmail && { opacity: 0.7 },
+                      (!isOnline || processingEmail) && { opacity: 0.6 },
                     ]}
                     onPress={handleChangeEmail}
-                    disabled={processingEmail}
+                    disabled={!isOnline || processingEmail}
                   >
                     {processingEmail ? (
                       <ActivityIndicator color="#fff" />
@@ -489,20 +267,42 @@ const ProfileScreen: React.FC = () => {
                   </TouchableOpacity>
                 </View>
               )}
+
+              {/* Cambiar contraseña */}
               <TouchableOpacity
-                style={[styles.inlineButton, { marginTop: 10 }]}
-                onPress={() => setShowPasswordForm((prev) => !prev)}
+                style={[
+                  styles.inlineButton,
+                  { marginTop: 10 },
+                  !canUseOnlineSecurity && styles.disabledButton,
+                ]}
+                disabled={!canUseOnlineSecurity}
+                onPress={() => {
+                  if (!canUseOnlineSecurity) {
+                    Alert.alert(
+                      "Sin conexión",
+                      "Para cambiar tu contraseña necesitas conexión a internet."
+                    );
+                    return;
+                  }
+                  setShowPasswordForm((prev) => !prev);
+                }}
               >
                 <MaterialIcons
                   name="lock-reset"
                   size={18}
-                  color="#007bff"
+                  color={canUseOnlineSecurity ? "#007bff" : "#9ca3af"}
                   style={{ marginRight: 6 }}
                 />
-                <Text style={styles.inlineButtonText}>
+                <Text
+                  style={[
+                    styles.inlineButtonText,
+                    !canUseOnlineSecurity && styles.inlineButtonTextDisabled,
+                  ]}
+                >
                   {showPasswordForm ? "Cancelar" : "Cambiar contraseña"}
                 </Text>
               </TouchableOpacity>
+
               {showPasswordForm && (
                 <View style={styles.securityCard}>
                   <Text style={styles.label}>Contraseña actual</Text>
@@ -512,6 +312,7 @@ const ProfileScreen: React.FC = () => {
                     onChangeText={setCurrentPass}
                     placeholder="Actual"
                     secureTextEntry
+                    editable={isOnline && !processingPass}
                   />
                   <Text style={[styles.label, { marginTop: 8 }]}>
                     Nueva contraseña
@@ -522,6 +323,7 @@ const ProfileScreen: React.FC = () => {
                     onChangeText={setNewPass}
                     placeholder="Mín. 6 caracteres"
                     secureTextEntry
+                    editable={isOnline && !processingPass}
                   />
                   <Text style={[styles.label, { marginTop: 8 }]}>
                     Confirmar
@@ -532,14 +334,15 @@ const ProfileScreen: React.FC = () => {
                     onChangeText={setConfirmPass}
                     placeholder="Repetir"
                     secureTextEntry
+                    editable={isOnline && !processingPass}
                   />
                   <TouchableOpacity
                     style={[
                       styles.saveButtonSmall,
-                      processingPass && { opacity: 0.7 },
+                      (!isOnline || processingPass) && { opacity: 0.6 },
                     ]}
                     onPress={handleChangePassword}
-                    disabled={processingPass}
+                    disabled={!isOnline || processingPass}
                   >
                     {processingPass ? (
                       <ActivityIndicator color="#fff" />
@@ -554,6 +357,7 @@ const ProfileScreen: React.FC = () => {
 
           <View style={styles.sectionDivider} />
           <Text style={styles.sectionTitle}>Información personal</Text>
+
           <View style={styles.field}>
             <Text style={styles.label}>Nombre</Text>
             <TextInput
@@ -564,6 +368,7 @@ const ProfileScreen: React.FC = () => {
               editable={isEditing}
             />
           </View>
+
           <View style={styles.row}>
             <View style={[styles.field, styles.rowItem]}>
               <Text style={styles.label}>Edad</Text>
@@ -591,6 +396,7 @@ const ProfileScreen: React.FC = () => {
 
           <View style={styles.sectionDivider} />
           <Text style={styles.sectionTitle}>Contacto de emergencia</Text>
+
           <View style={styles.field}>
             <Text style={styles.label}>Nombre</Text>
             <TextInput
@@ -601,6 +407,7 @@ const ProfileScreen: React.FC = () => {
               editable={isEditing}
             />
           </View>
+
           <View style={styles.field}>
             <Text style={styles.label}>Parentesco</Text>
             <TextInput
@@ -611,6 +418,7 @@ const ProfileScreen: React.FC = () => {
               editable={isEditing}
             />
           </View>
+
           <View style={styles.field}>
             <Text style={styles.label}>Teléfono</Text>
             <TextInput
@@ -625,6 +433,7 @@ const ProfileScreen: React.FC = () => {
 
           <View style={styles.sectionDivider} />
           <Text style={styles.sectionTitle}>Datos rápidos</Text>
+
           <View style={styles.field}>
             <Text style={styles.label}>Tipo de sangre</Text>
             <TextInput
@@ -635,6 +444,7 @@ const ProfileScreen: React.FC = () => {
               editable={isEditing}
             />
           </View>
+
           <View style={styles.field}>
             <Text style={styles.label}>Notas</Text>
             <TextInput
@@ -653,6 +463,7 @@ const ProfileScreen: React.FC = () => {
 
           <View style={styles.sectionDivider} />
           <Text style={styles.sectionTitle}>Datos médicos</Text>
+
           <View style={styles.field}>
             <Text style={styles.label}>Alergias</Text>
             <TextInput
@@ -668,6 +479,7 @@ const ProfileScreen: React.FC = () => {
               editable={isEditing}
             />
           </View>
+
           <View style={styles.field}>
             <Text style={styles.label}>Condiciones médicas</Text>
             <TextInput
@@ -812,6 +624,7 @@ const styles = StyleSheet.create({
   },
   saveButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   securityBlock: { marginTop: 4 },
+
   inlineButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -819,6 +632,24 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   inlineButtonText: { color: "#007bff", fontWeight: "600", fontSize: 13 },
+
+  disabledButton: { opacity: 0.45 },
+  inlineButtonTextDisabled: { color: "#9ca3af" },
+
+  offlineBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "#f3f4f6",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    marginBottom: 8,
+  },
+  offlineBannerText: { fontSize: 12, color: "#6b7280", flexShrink: 1 },
+
   securityCard: {
     marginTop: 4,
     padding: 10,

@@ -1,5 +1,5 @@
 // src/services/offline/index.ts
-// ✅ SIMPLIFICADO: Solo SyncQueueService
+
 
 export { syncQueueService } from "./SyncQueueService";
 

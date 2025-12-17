@@ -69,9 +69,6 @@ export type PatientLink = {
  *                    CARE LINKS (Red de apoyo)
  * ============================================================ */
 
-/**
- * Escuchar mi red de apoyo (yo soy el owner)
- */
 export function listenMyCareLinks(
   ownerId: string,
   onData: (links: CareLink[]) => void,
@@ -115,7 +112,7 @@ export function listenMyCareLinks(
       onData(list);
     },
     (err) => {
-      console.log("Error escuchando careLinks:", err);
+
       onError?.(err);
     }
   );
@@ -178,7 +175,7 @@ export async function revokeCareLink(id: string): Promise<void> {
 }
 
 /* ============================================================
- *            CARE INVITES (Invitaciones pendientes)
+ *            CARE INVITES 
  * ============================================================ */
 
 /**
@@ -217,7 +214,7 @@ export function listenCareInvites(
       onData(list);
     },
     (err) => {
-      console.log("❌ Error escuchando invitaciones:", err);
+
       onError?.(err);
     }
   );
@@ -233,7 +230,7 @@ export async function acceptCareInvite(inviteId: string): Promise<void> {
       status: "accepted",
       updatedAt: new Date().toISOString(),
     });
-    console.log("✅ Invitación aceptada");
+
   } catch (error) {
     console.error("Error aceptando invitación:", error);
     throw error;
@@ -250,7 +247,7 @@ export async function rejectCareInvite(inviteId: string): Promise<void> {
       status: "rejected",
       updatedAt: new Date().toISOString(),
     });
-    console.log("✅ Invitación rechazada");
+
   } catch (error) {
     console.error("Error rechazando invitación:", error);
     throw error;
@@ -308,7 +305,7 @@ export function listenMyPatients(
       onData(list);
     },
     (err) => {
-      console.log("Error cargando pacientes:", err);
+
       onError?.(err);
     }
   );
@@ -348,7 +345,7 @@ export async function loadPatientPhoto(
 
     return null;
   } catch (error) {
-    console.log("⚠️ Error cargando foto de paciente", patientUid, error);
+
     return null;
   }
 }

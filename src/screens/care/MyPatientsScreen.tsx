@@ -1,5 +1,4 @@
 // src/screens/care/MyPatientsScreen.tsx
-// ✅ REFACTORIZADA: Solo UI, lógica en hooks y servicios
 
 import React from "react";
 import {
@@ -48,9 +47,12 @@ export default function MyPatientsScreen({ navigation }: Props) {
     );
   };
 
-  /* =========================================
-   *           🎨 RENDER HELPERS
-   * ========================================= */
+  const goToNotifications = () => {
+    // ⚠️ Asegúrate que esta ruta exista en tu StackNavigator/RootStackParamList
+    navigation.navigate("CaregiverNotifications" as any);
+  };
+
+
 
   const renderPatientCard = (p: PatientLink) => {
     const photoUri = profilePhotos[p.ownerUid];
@@ -136,9 +138,7 @@ export default function MyPatientsScreen({ navigation }: Props) {
     </View>
   );
 
-  /* =========================================
-   *              🎨 RENDER MAIN
-   * ========================================= */
+
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -156,6 +156,21 @@ export default function MyPatientsScreen({ navigation }: Props) {
               parte de su red de apoyo.
             </Text>
           </View>
+
+          <TouchableOpacity
+            style={styles.headerActionBtn}
+            onPress={goToNotifications}
+            accessibilityRole="button"
+            accessibilityLabel="Notificaciones"
+            activeOpacity={0.85}
+          >
+            <MaterialIcons
+              name="notifications"
+              size={22}
+              color={COLORS.surface}
+            />
+          </TouchableOpacity>
+
           <View style={styles.sectionIcon}>
             <MaterialIcons
               name="supervisor-account"
@@ -176,9 +191,6 @@ export default function MyPatientsScreen({ navigation }: Props) {
   );
 }
 
-/* =========================================
- *              🎨 STYLES
- * ========================================= */
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
@@ -200,6 +212,17 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZES.medium,
     color: COLORS.textSecondary,
   },
+
+  headerActionBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: COLORS.secondary,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 12,
+  },
+
   sectionIcon: {
     width: 44,
     height: 44,

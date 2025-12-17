@@ -20,7 +20,7 @@ type NotifyResult = {
 };
 
 // ============================================================
-//    🚨 NOTIFICAR INCUMPLIMIENTO (MÚLTIPLES POSPOSICIONES)
+//     NOTIFICAR INCUMPLIMIENTO (MÚLTIPLES POSPOSICIONES)
 // ============================================================
 
 /**
@@ -44,7 +44,7 @@ export async function notifyCaregiversAboutNoncompliance(params: {
     const { patientUid, patientName, medicationName, snoozeCount, type } =
       params;
 
-    // 🔍 Buscar cuidadores activos del paciente
+    //  Buscar cuidadores activos del paciente
     const careNetworkRef = collection(db, "users", patientUid, "careNetwork");
     const q = query(
       careNetworkRef,
@@ -55,11 +55,11 @@ export async function notifyCaregiversAboutNoncompliance(params: {
     const snapshot = await getDocs(q);
 
     if (snapshot.empty) {
-      console.log("⚠️ No hay cuidadores activos para notificar");
+
       return { success: true, notifiedCount: 0 };
     }
 
-    // 📨 Crear notificación para cada cuidador
+    // Crear notificación para cada cuidador
     const notificationPromises = snapshot.docs.map(async (doc) => {
       const caregiverData = doc.data();
       const caregiverUid = caregiverData.caregiverUid;
@@ -67,14 +67,12 @@ export async function notifyCaregiversAboutNoncompliance(params: {
       // Solo notificar si el modo de acceso permite alertas
       const accessMode = caregiverData.accessMode || "alerts-only";
       if (accessMode === "disabled") {
-        console.log(
-          `⏭️ Cuidador ${doc.id} tiene acceso desactivado, omitiendo`
-        );
+
         return false;
       }
 
       if (!caregiverUid) {
-        console.log("⚠️ Cuidador sin UID:", doc.id);
+
         return false;
       }
 
@@ -102,17 +100,13 @@ export async function notifyCaregiversAboutNoncompliance(params: {
         read: false,
         createdAt: serverTimestamp(),
       });
-
-      console.log(
-        `✅ Notificación de incumplimiento enviada a cuidador ${caregiverUid}`
-      );
       return true;
     });
 
     const results = await Promise.all(notificationPromises);
     const notifiedCount = results.filter(Boolean).length;
 
-    console.log(`✅ Notificadas ${notifiedCount} personas de la red de apoyo`);
+
     return { success: true, notifiedCount };
   } catch (error: any) {
     console.error("❌ Error notificando a cuidadores:", error);
@@ -121,7 +115,7 @@ export async function notifyCaregiversAboutNoncompliance(params: {
 }
 
 // ============================================================
-//    🆕 NOTIFICAR DESCARTE (DISMISS) DE ALARMA
+//     NOTIFICAR DESCARTE (DISMISS) DE ALARMA
 // ============================================================
 
 /**
@@ -150,7 +144,7 @@ export async function notifyCaregiversAboutDismissal(params: {
       snoozeCountBeforeDismiss,
     } = params;
 
-    // 🔍 Buscar cuidadores activos del paciente
+    //  Buscar cuidadores activos del paciente
     const careNetworkRef = collection(db, "users", patientUid, "careNetwork");
     const q = query(
       careNetworkRef,
@@ -161,11 +155,11 @@ export async function notifyCaregiversAboutDismissal(params: {
     const snapshot = await getDocs(q);
 
     if (snapshot.empty) {
-      console.log("⚠️ No hay cuidadores activos para notificar el descarte");
+
       return { success: true, notifiedCount: 0 };
     }
 
-    // 📨 Crear notificación para cada cuidador
+    //  Crear notificación para cada cuidador
     const notificationPromises = snapshot.docs.map(async (doc) => {
       const caregiverData = doc.data();
       const caregiverUid = caregiverData.caregiverUid;
@@ -173,14 +167,12 @@ export async function notifyCaregiversAboutDismissal(params: {
       // Solo notificar si el modo de acceso permite alertas
       const accessMode = caregiverData.accessMode || "alerts-only";
       if (accessMode === "disabled") {
-        console.log(
-          `⏭️ Cuidador ${doc.id} tiene acceso desactivado, omitiendo`
-        );
+
         return false;
       }
 
       if (!caregiverUid) {
-        console.log("⚠️ Cuidador sin UID:", doc.id);
+
         return false;
       }
 
@@ -228,18 +220,13 @@ export async function notifyCaregiversAboutDismissal(params: {
         createdAt: serverTimestamp(),
       });
 
-      console.log(
-        `✅ Notificación de descarte enviada a cuidador ${caregiverUid} sobre ${itemName}`
-      );
       return true;
     });
 
     const results = await Promise.all(notificationPromises);
     const notifiedCount = results.filter(Boolean).length;
 
-    console.log(
-      `✅ Descarte notificado a ${notifiedCount} personas de la red de apoyo`
-    );
+
     return { success: true, notifiedCount };
   } catch (error: any) {
     console.error("❌ Error notificando descarte a cuidadores:", error);
@@ -248,12 +235,12 @@ export async function notifyCaregiversAboutDismissal(params: {
 }
 
 // ============================================================
-//    📊 REGISTRAR EVENTO DE POSPOSICIÓN
+//    REGISTRAR EVENTO DE POSPOSICIÓN
 // ============================================================
 
 /**
  * Registrar evento de posposición en Firestore
- * (Útil para historial y análisis)
+
  */
 export async function logSnoozeEvent(params: {
   patientUid: string;
@@ -285,22 +272,19 @@ export async function logSnoozeEvent(params: {
       timestamp: serverTimestamp(),
     });
 
-    console.log(
-      `📊 Evento de posposición registrado: ${itemName} (${snoozeCount}x)`
-    );
+
   } catch (error) {
-    console.error("❌ Error registrando evento de posposición:", error);
+
   }
 }
 
 // ============================================================
-//    🆕 REGISTRAR EVENTO DE DESCARTE
+//    REGISTRAR EVENTO DE DESCARTE
 // ============================================================
 
 /**
  * Registrar evento de descarte en Firestore
- * (Para historial y análisis de adherencia)
- */
+  */
 export async function logDismissalEvent(params: {
   patientUid: string;
   itemId: string;
@@ -323,14 +307,14 @@ export async function logDismissalEvent(params: {
       timestamp: serverTimestamp(),
     });
 
-    console.log(`📊 Evento de descarte registrado: ${itemName}`);
+
   } catch (error) {
     console.error("❌ Error registrando evento de descarte:", error);
   }
 }
 
 // ============================================================
-//    ✅ REGISTRAR CUMPLIMIENTO EXITOSO
+//    REGISTRAR CUMPLIMIENTO EXITOSO
 // ============================================================
 
 /**
@@ -357,7 +341,7 @@ export async function logComplianceSuccess(params: {
       timestamp: serverTimestamp(),
     });
 
-    console.log(`✅ Cumplimiento registrado: ${itemName}`);
+
   } catch (error) {
     console.error("❌ Error registrando cumplimiento:", error);
   }

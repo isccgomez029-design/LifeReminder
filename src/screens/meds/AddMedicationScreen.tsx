@@ -1,7 +1,7 @@
 // src/screens/meds/AddMedicationScreen.tsx
-// ✅ ACTUALIZADO: Integrado con sistema de alarmas offline-first
 
-import React, { useState } from "react";
+
+import React from "react";
 import {
   View,
   Text,
@@ -9,403 +9,57 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
-  Alert,
   Image,
 } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 import { COLORS, FONT_SIZES } from "../../../types";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RouteProp } from "@react-navigation/native";
+import { RouteProp, useRoute } from "@react-navigation/native";
 import { RootStackParamList } from "../../navigation/StackNavigator";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// 🔹 Firebase Auth
-import { auth } from "../../config/firebaseConfig";
-
-// 🔹 Servicios offline
-import { offlineAuthService } from "../../services/offline/OfflineAuthService";
-import { syncQueueService } from "../../services/offline/SyncQueueService";
-import { offlineAlarmService } from "../../services/offline/OfflineAlarmService";
-
-// 🔹 Utils
-import { normalizeTime } from "../../utils/timeUtils";
-
-// 🔹 Componentes
 import ImagePickerSheet from "../../components/ImagePickerSheet";
 import TimePickerField from "../../components/TimePickerField";
 
-// 🔹 Servicio de imagen
-import {
-  pickImageFromGallery,
-  takePhotoWithCamera,
-} from "../../services/imagePickerService";
+import { useAddMedication } from "../../hooks/useAddMedication";
 
 type Nav = StackNavigationProp<RootStackParamList, "AddMedication">;
 type Route = RouteProp<RootStackParamList, "AddMedication">;
 
 export default function AddMedicationScreen({
   navigation,
-  route,
 }: {
   navigation: Nav;
-  route: Route;
 }) {
-  const medId = route?.params?.medId;
-  const initial = route?.params?.initialData;
-  const initialAny: any = initial ?? {};
+  const route = useRoute<Route>();
 
-  const isEdit = !!medId;
+  const {
+    isEdit,
 
-  const [nombre, setNombre] = useState(initial?.nombre ?? "");
-  const [frecuencia, setFrecuencia] = useState(initial?.frecuencia ?? "");
-  const [hora, setHora] = useState(initial?.proximaToma ?? "");
+    nombre,
+    frecuencia,
+    hora,
+    cantidad,
+    doseAmount,
+    doseUnit,
+    imageUri,
+    showImageSheet,
 
-  const [cantidad, setCantidad] = useState(
-    initialAny.cantidadActual != null
-      ? String(initialAny.cantidadActual)
-      : initialAny.cantidad != null
-      ? String(initialAny.cantidad)
-      : ""
-  );
+    setNombre,
+    setFrecuencia,
+    setHora,
+    setCantidad,
+    setDoseAmount,
+    setDoseUnit,
 
-  const [doseAmount, setDoseAmount] = useState(
-    initialAny.cantidadPorToma != null
-      ? String(initialAny.cantidadPorToma)
-      : initialAny.doseAmount != null
-      ? String(initialAny.doseAmount)
-      : initialAny.dosis
-      ? String(initialAny.dosis).match(/\d+/)?.[0] ?? ""
-      : ""
-  );
+    setShowImageSheet,
+    onPressCamera,
+    handlePickFromGallery,
+    handleTakePhoto,
 
-  const [doseUnit, setDoseUnit] = useState<"tabletas" | "ml">(
-    initialAny.doseUnit === "ml"
-      ? "ml"
-      : initialAny.doseUnit === "tabletas"
-      ? "tabletas"
-      : String(initialAny.dosis || "")
-          .toLowerCase()
-          .includes("ml")
-      ? "ml"
-      : "tabletas"
-  );
-
-  const [imageUri, setImageUri] = useState<string>(initialAny.imageUri ?? "");
-  const [showImageSheet, setShowImageSheet] = useState(false);
-
-  const handlePickFromGallery = async () => {
-    const uri = await pickImageFromGallery();
-    if (uri) setImageUri(uri);
-  };
-
-  const handleTakePhoto = async () => {
-    const uri = await takePhotoWithCamera();
-    if (uri) setImageUri(uri);
-  };
-
-  const onPressCamera = () => {
-    setShowImageSheet(true);
-  };
-
-  const validate = () => {
-    if (!nombre.trim()) {
-      Alert.alert("Falta el nombre", "Ingresa el nombre del medicamento.");
-      return false;
-    }
-
-    if (!doseAmount.trim()) {
-      Alert.alert(
-        "Falta la dosis",
-        "Ingresa la cantidad por toma, por ejemplo: 1, 2, 5, etc."
-      );
-      return false;
-    }
-    const doseNum = Number(doseAmount.trim());
-    if (!Number.isFinite(doseNum) || doseNum <= 0) {
-      Alert.alert("Dosis inválida", "La dosis debe ser un número mayor que 0.");
-      return false;
-    }
-    if (!doseUnit) {
-      Alert.alert(
-        "Unidad de dosis",
-        "Selecciona si la dosis es en tabletas/pastillas o en ml."
-      );
-      return false;
-    }
-
-    const freqTrim = frecuencia.trim();
-    if (!freqTrim) {
-      Alert.alert(
-        "Falta la frecuencia",
-        "Ingresa cada cuánto se toma en formato HH:MM, por ejemplo: 08:00."
-      );
-      return false;
-    }
-    const freqMatch = freqTrim.match(/^(\d{1,2}):(\d{2})$/);
-    if (!freqMatch) {
-      Alert.alert(
-        "Frecuencia inválida",
-        "La frecuencia debe tener el formato HH:MM, por ejemplo: 08:00."
-      );
-      return false;
-    }
-    const h = Number(freqMatch[1]);
-    const m = Number(freqMatch[2]);
-    if (
-      !Number.isFinite(h) ||
-      !Number.isFinite(m) ||
-      h < 0 ||
-      h > 23 ||
-      m < 0 ||
-      m > 59
-    ) {
-      Alert.alert(
-        "Frecuencia inválida",
-        "Revisa las horas y minutos de la frecuencia."
-      );
-      return false;
-    }
-
-    if (cantidad.trim()) {
-      const n = Number(cantidad.trim());
-      if (!Number.isFinite(n) || n < 0) {
-        Alert.alert(
-          "Cantidad inválida",
-          "La cantidad disponible debe ser un número entero mayor o igual a 0."
-        );
-        return false;
-      }
-    }
-
-    return true;
-  };
-
-  // ============================================
-  //  FUNCIÓN PRINCIPAL: onSubmit
-  // ============================================
-  const onSubmit = async () => {
-    if (!validate()) return;
-
-    // ✅ Obtener userId de forma offline-first
-    const userId = auth.currentUser?.uid || offlineAuthService.getCurrentUid();
-
-    if (!userId) {
-      Alert.alert(
-        "Sesión requerida",
-        "Debes iniciar sesión para guardar tus medicamentos."
-      );
-      return;
-    }
-
-    const cantidadNumber = cantidad.trim() ? Number(cantidad.trim()) : 0;
-    const doseAmountNumber = doseAmount.trim()
-      ? Number(doseAmount.trim())
-      : undefined;
-
-    const horaFormatted = hora.trim() ? normalizeTime(hora.trim()) : "";
-
-    if (horaFormatted && horaFormatted !== hora) {
-      setHora(horaFormatted);
-    }
-
-    try {
-      const medicationId =
-        isEdit && medId
-          ? medId
-          : `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      const dosisString =
-        doseAmountNumber !== undefined
-          ? `${doseAmountNumber} ${doseUnit}`
-          : undefined;
-
-      // ============================================
-      //  CALCULAR nextDueAt PARA LA PRIMERA ALARMA
-      // ============================================
-      let nextDueAt: Date | null = null;
-      let alarmId: string | null = null;
-
-      if (horaFormatted && frecuencia.trim()) {
-        // Parsear hora ingresada "HH:MM"
-        const [hours, minutes] = horaFormatted.split(":").map(Number);
-
-        // Crear fecha de primera toma
-        const now = new Date();
-        const firstDose = new Date();
-        firstDose.setHours(hours, minutes, 0, 0);
-
-        // Si la hora ya pasó hoy, programar para mañana
-        if (firstDose <= now) {
-          firstDose.setDate(firstDose.getDate() + 1);
-        }
-
-        nextDueAt = firstDose;
-
-        // ✅ PROGRAMAR ALARMA usando el servicio offline
-        const result = await offlineAlarmService.scheduleMedicationAlarm(
-          nextDueAt,
-          {
-            nombre: nombre.trim(),
-            dosis: dosisString,
-            imageUri: imageUri || undefined,
-            medId: medicationId,
-            ownerUid: userId,
-            frecuencia: frecuencia.trim(),
-            cantidadActual: cantidadNumber,
-            cantidadPorToma: doseAmountNumber || 1,
-            snoozeCount: 0,
-          }
-        );
-
-        if (result.success) {
-          alarmId = result.notificationId;
-          console.log(`✅ Alarma programada: ${alarmId}`);
-        } else {
-          console.log(`⚠️ No se pudo programar alarma: ${result.error}`);
-        }
-      }
-
-      // ============================================
-      //  PREPARAR DATOS DEL MEDICAMENTO
-      // ============================================
-      const medicationData: any = {
-        id: medicationId,
-        nombre: nombre.trim(),
-        dosis: dosisString,
-        frecuencia: frecuencia.trim(),
-        proximaToma: horaFormatted || null,
-        nextDueAt: nextDueAt ? nextDueAt.toISOString() : null,
-        doseAmount: doseAmountNumber,
-        doseUnit: doseUnit,
-        cantidadPorToma: doseAmountNumber || 1,
-        cantidadInicial: cantidadNumber,
-        cantidadActual: cantidadNumber,
-        cantidad: cantidadNumber,
-        low20Notified: false,
-        low10Notified: false,
-        imageUri: imageUri || undefined,
-        takenToday: false,
-        currentAlarmId: alarmId, // ✅ Guardar ID de la alarma
-        snoozeCount: 0,
-        snoozedUntil: null,
-        lastSnoozeAt: null,
-        createdAt: isEdit ? undefined : new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isArchived: false,
-      };
-
-      // ============================================
-      //  GUARDAR/ACTUALIZAR EN FIRESTORE
-      // ============================================
-      if (isEdit && medId) {
-        // Si estamos editando, primero cancelar alarmas anteriores
-        await offlineAlarmService.cancelAllAlarmsForItem(medId, userId);
-
-        await syncQueueService.enqueue(
-          "UPDATE",
-          "medications",
-          medId,
-          userId,
-          medicationData
-        );
-      } else {
-        await syncQueueService.enqueue(
-          "CREATE",
-          "medications",
-          medicationId,
-          userId,
-          medicationData
-        );
-      }
-
-      Alert.alert(
-        "Listo",
-        isEdit
-          ? "Medicamento actualizado."
-          : alarmId
-          ? `Medicamento guardado. Primera alarma programada para ${nextDueAt?.toLocaleTimeString(
-              "es-MX",
-              {
-                hour: "2-digit",
-                minute: "2-digit",
-              }
-            )}.`
-          : "Medicamento guardado.",
-        [
-          {
-            text: "OK",
-            onPress: () => navigation.goBack(),
-          },
-        ]
-      );
-    } catch (e: any) {
-      console.log("Error guardando medicamento:", e);
-      Alert.alert(
-        "Error",
-        `No se pudo guardar el medicamento.\n\nCódigo: ${
-          e?.code ?? "desconocido"
-        }\nDetalle: ${e?.message ?? "sin mensaje"}`
-      );
-    }
-  };
-
-  // ============================================
-  //  FUNCIÓN: onDelete
-  // ============================================
-  const onDelete = () => {
-    if (!isEdit || !medId) return;
-
-    Alert.alert(
-      "Eliminar medicamento",
-      "¿Seguro que deseas eliminar este medicamento? Esta acción no se puede deshacer.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Eliminar",
-          style: "destructive",
-          onPress: async () => {
-            const userId =
-              auth.currentUser?.uid || offlineAuthService.getCurrentUid();
-
-            if (!userId) {
-              Alert.alert(
-                "Sesión requerida",
-                "Debes iniciar sesión para eliminar medicamentos."
-              );
-              return;
-            }
-
-            try {
-              // ✅ CANCELAR TODAS LAS ALARMAS DEL MEDICAMENTO
-              await offlineAlarmService.cancelAllAlarmsForItem(medId, userId);
-              console.log(`🔕 Alarmas del medicamento ${medId} canceladas`);
-
-              // Eliminar medicamento
-              await syncQueueService.enqueue(
-                "DELETE",
-                "medications",
-                medId,
-                userId,
-                {}
-              );
-
-              Alert.alert("Eliminado", "El medicamento fue eliminado.", [
-                { text: "OK", onPress: () => navigation.goBack() },
-              ]);
-            } catch (e: any) {
-              console.log("Error eliminando medicamento:", e);
-              Alert.alert(
-                "Error",
-                `No se pudo eliminar el medicamento.\n\nCódigo: ${
-                  e?.code ?? "desconocido"
-                }\nDetalle: ${e?.message ?? "sin mensaje"}`
-              );
-            }
-          },
-        },
-      ]
-    );
-  };
+    onSubmit,
+    onDelete,
+  } = useAddMedication({ navigation, routeParams: route.params as any });
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -414,7 +68,7 @@ export default function AddMedicationScreen({
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Título + icono de sección */}
+
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>
@@ -430,9 +84,9 @@ export default function AddMedicationScreen({
           </View>
         </View>
 
-        {/* ===== Tarjeta / Formulario ===== */}
+
         <View style={styles.card}>
-          {/* Botón cámara flotante */}
+
           <TouchableOpacity
             style={styles.cameraBtn}
             onPress={onPressCamera}
@@ -445,14 +99,14 @@ export default function AddMedicationScreen({
             />
           </TouchableOpacity>
 
-          {/* Preview de imagen si ya se seleccionó */}
+
           {imageUri ? (
             <View style={styles.previewWrapper}>
               <Image source={{ uri: imageUri }} style={styles.previewImage} />
             </View>
           ) : null}
 
-          {/* Nombre */}
+
           <View style={[styles.fieldRow, styles.firstFieldRow]}>
             <Text style={styles.label}>Nombre:</Text>
             <TextInput
@@ -464,7 +118,7 @@ export default function AddMedicationScreen({
             />
           </View>
 
-          {/* Hora de próxima toma (TimePickerField) */}
+
           <View style={styles.fieldRow}>
             <Text style={styles.label}>Hora próxima toma:</Text>
             <View style={styles.timeRow}>
@@ -477,7 +131,7 @@ export default function AddMedicationScreen({
             </View>
           </View>
 
-          {/* Frecuencia: Cada [HH:MM] hrs (TimePickerField) */}
+          {/* Frecuencia */}
           <View style={styles.fieldRow}>
             <Text style={styles.label}>Cada:</Text>
             <View style={styles.timeRow}>
@@ -491,7 +145,6 @@ export default function AddMedicationScreen({
             </View>
           </View>
 
-          {/* Dosis: cantidad + unidad */}
           <View style={styles.fieldRow}>
             <Text style={styles.label}>Dosis por toma:</Text>
             <View style={styles.doseRow}>
@@ -543,7 +196,6 @@ export default function AddMedicationScreen({
             </View>
           </View>
 
-          {/* Cantidad disponible */}
           <View style={styles.fieldRow}>
             <Text style={styles.label}>Cantidad disponible:</Text>
             <TextInput
@@ -571,7 +223,7 @@ export default function AddMedicationScreen({
         )}
       </ScrollView>
 
-      {/* Bottom sheet de imagen reutilizable */}
+      {/* Sheet de imagen */}
       <ImagePickerSheet
         visible={showImageSheet}
         onClose={() => setShowImageSheet(false)}
@@ -650,23 +302,11 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
   },
 
-  previewWrapper: {
-    alignItems: "center",
-    marginTop: 0,
-    marginBottom: 12,
-  },
-  previewImage: {
-    width: 140,
-    height: 90,
-    borderRadius: 8,
-  },
+  previewWrapper: { alignItems: "center", marginBottom: 12 },
+  previewImage: { width: 140, height: 90, borderRadius: 8 },
 
-  fieldRow: {
-    marginBottom: 14,
-  },
-  firstFieldRow: {
-    marginTop: 4,
-  },
+  fieldRow: { marginBottom: 14 },
+  firstFieldRow: { marginTop: 4 },
 
   label: {
     color: COLORS.text,
@@ -685,15 +325,9 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
-  timeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 4,
-  },
+  timeRow: { flexDirection: "row", alignItems: "center", marginTop: 4 },
 
-  doseRow: {
-    flexDirection: "column",
-  },
+  doseRow: { flexDirection: "column" },
   doseAmountInput: {
     borderWidth: 1,
     borderColor: COLORS.textSecondary,
@@ -704,6 +338,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     backgroundColor: COLORS.background,
   },
+
   unitRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -728,12 +363,8 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontWeight: "600",
   },
-  unitChipTextSmall: {
-    fontSize: FONT_SIZES.small,
-  },
-  unitChipTextSelected: {
-    color: COLORS.surface,
-  },
+  unitChipTextSmall: { fontSize: FONT_SIZES.small },
+  unitChipTextSelected: { color: COLORS.surface },
 
   primaryBtn: {
     backgroundColor: COLORS.primary,

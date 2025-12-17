@@ -1,5 +1,4 @@
 // src/services/offline/OfflineAuthService.ts
-// ✅ Login offline siempre + Register offline-first (pantallas limpias) + Finalización automática online
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo from "@react-native-community/netinfo";
@@ -89,15 +88,14 @@ const STORAGE_KEYS = {
   PENDING_REGISTRATION: "@lifereminder/auth/pending_registration",
 };
 
-// ✅ Offline-first real: no expira
+// offline-first real
 const OFFLINE_SESSION_VALIDITY_MS: number | null = null;
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const USERNAME_RE = /^[a-zA-Z0-9._-]{3,20}$/;
 
-// ============================================================
+
 //                    UTILIDADES
-// ============================================================
 
 async function generateSalt(): Promise<string> {
   const randomBytes = await Crypto.getRandomBytesAsync(16);
@@ -117,7 +115,6 @@ async function hashPassword(password: string, salt: string): Promise<string> {
 
 function log(message: string, data?: any) {
   const timestamp = new Date().toISOString();
-  console.log(`[OfflineAuth ${timestamp}] ${message}`, data ?? "");
 }
 
 function isNetOnline(state: {
@@ -129,9 +126,8 @@ function isNetOnline(state: {
 
 let cachedUidSync: string | null = null;
 
-// ============================================================
+
 //              CLASE PRINCIPAL: OfflineAuthService
-// ============================================================
 
 export class OfflineAuthService {
   private currentUser: CachedUser | null = null;
@@ -153,30 +149,26 @@ export class OfflineAuthService {
   }
 
   private async _doInitialize(): Promise<CachedUser | null> {
-    log("🚀 Inicializando OfflineAuthService...");
-
     await this.loadCachedUid();
 
     const netState = await NetInfo.fetch();
     this.isOnline = isNetOnline(netState);
-    log(`📡 Estado de conexión: ${this.isOnline ? "Online" : "Offline"}`);
 
     this.connectivityUnsubscribe = NetInfo.addEventListener((state) => {
       const wasOffline = !this.isOnline;
       this.isOnline = isNetOnline(state);
 
       if (wasOffline && this.isOnline) {
-        log("🔄 Reconexión detectada, sincronizando sesión...");
         this.syncSessionOnReconnect();
       }
     });
 
-    // ✅ Si hay registro pendiente y estamos online, finalizarlo primero
+    //  Si hay registro pendiente y estamos online, finalizarlo primero
     if (this.isOnline) {
       await this.finalizePendingRegistrationIfAny();
     }
 
-    // ✅ Restaurar Firebase si aplica
+    //  Restaurar Firebase si aplica
     await this.attemptFirebaseRestore();
 
     const cachedUser = await this.restoreSession();
@@ -188,7 +180,7 @@ export class OfflineAuthService {
     });
 
     this.isInitialized = true;
-    log("✅ OfflineAuthService inicializado");
+
     return cachedUser;
   }
 
@@ -197,7 +189,7 @@ export class OfflineAuthService {
       const uid = await AsyncStorage.getItem(STORAGE_KEYS.CACHED_UID);
       if (uid) {
         cachedUidSync = uid;
-        log(`💾 UID cargado: ${uid.substring(0, 8)}...`);
+
         return;
       }
 
@@ -207,11 +199,11 @@ export class OfflineAuthService {
         if (user.uid) {
           cachedUidSync = user.uid;
           await AsyncStorage.setItem(STORAGE_KEYS.CACHED_UID, user.uid);
-          log(`💾 UID extraído: ${user.uid.substring(0, 8)}...`);
+         
         }
       }
     } catch (error) {
-      log("⚠️ Error cargando UID:", error);
+
     }
   }
 
@@ -221,20 +213,11 @@ export class OfflineAuthService {
     this.authStateListeners.clear();
     this.isInitialized = false;
     this.initializationPromise = null;
-    log("🛑 OfflineAuthService destruido");
+
   }
 
-  // ============================================================
-  //                    REGISTER (PANTALLAS LIMPIAS)
-  // ============================================================
 
-  /**
-   * ✅ Register único (pantalla limpia):
-   * - Valida inputs
-   * - Detecta internet
-   * - Online: crea Firebase Auth + doc usuarios + siembra offline login
-   * - Offline: crea pending local + login inmediato offline
-   */
+  //                    REGISTER 
   async register(params: RegisterParams): Promise<RegisterResult> {
     const validation = this.validateRegisterParams(params);
     if (!validation.ok) {
@@ -282,7 +265,7 @@ export class OfflineAuthService {
 
     // ONLINE => Firebase real
     try {
-      log("🧾 Intentando registro online (Firebase)...");
+
 
       const cred = await createUserWithEmailAndPassword(auth, email, password);
 
@@ -298,7 +281,7 @@ export class OfflineAuthService {
           updatedAt: serverTimestamp(),
         });
 
-        // ✅ siembra offline login (hash + plaintext + cached user/profile)
+        // siembra offline login (hash + plaintext + cached user/profile)
         await this.persistOfflineLoginAfterRegister(email, password);
       }
 
@@ -310,7 +293,7 @@ export class OfflineAuthService {
       };
     } catch (e: any) {
       const code = e?.code ?? "";
-      log("❌ Error registro online:", code);
+
 
       let msg = "Ocurrió un error al crear tu cuenta. Intenta de nuevo.";
       if (code === "auth/email-already-in-use")
@@ -319,7 +302,7 @@ export class OfflineAuthService {
       else if (code === "auth/weak-password")
         msg = "La contraseña es demasiado débil (mínimo 6 caracteres).";
       else if (code === "auth/network-request-failed") {
-        // fallback: si se cayó en el registro, aún podemos hacer pending local
+        // fallback: si se cayó en el registro, aún puedo hacer pending local
         const fallback = await this.registerOfflinePending({
           email,
           password,
@@ -408,9 +391,9 @@ export class OfflineAuthService {
     return { ok: true };
   }
 
-  // ============================================================
-  //                     REGISTER OFFLINE PENDING
-  // ============================================================
+
+  //  REGISTER OFFLINE PENDING
+
 
   async registerOfflinePending(params: {
     email: string;
@@ -474,10 +457,9 @@ export class OfflineAuthService {
       this.currentUser = localUser;
       this.notifyAuthStateListeners(localUser);
 
-      log("✅ Registro offline pendiente creado:", tempUid);
       return { success: true, tempUid };
     } catch (err: any) {
-      log("❌ registerOfflinePending() error:", err?.message);
+
       return { success: false, error: "No se pudo crear el registro offline." };
     }
   }
@@ -507,7 +489,7 @@ export class OfflineAuthService {
       if (!pending) return;
 
       this.isFinalizingPending = true;
-      log("🧩 Finalizando registro pendiente...");
+
 
       if (auth.currentUser) {
         if ((auth.currentUser.email || "").toLowerCase() === pending.email) {
@@ -550,12 +532,9 @@ export class OfflineAuthService {
 
       await this.clearPendingRegistration();
 
-      log(`✅ Registro pendiente finalizado. ${oldUid} -> ${realUid}`);
+
     } catch (err: any) {
-      log(
-        "⚠️ finalizePendingRegistrationIfAny() falló:",
-        err?.code || err?.message
-      );
+
     } finally {
       this.isFinalizingPending = false;
     }
@@ -579,9 +558,8 @@ export class OfflineAuthService {
         await this.cacheUserProfile(auth.currentUser.uid);
       }
 
-      log("✅ persistOfflineLoginAfterRegister() completado");
     } catch (err) {
-      log("⚠️ persistOfflineLoginAfterRegister() falló:", err);
+
     }
   }
 
@@ -589,7 +567,7 @@ export class OfflineAuthService {
     const trimmedEmail = (email || "").trim().toLowerCase();
     const pass = password || "";
 
-    // ✅ Validación aquí (para mantener pantallas limpias)
+
     if (!trimmedEmail) {
       return {
         success: false,
@@ -641,7 +619,7 @@ export class OfflineAuthService {
     password: string
   ): Promise<OfflineAuthResult> {
     try {
-      log("🔐 Intentando login online...");
+
 
       const result = await signInWithEmailAndPassword(auth, email, password);
       const user = result.user;
@@ -658,7 +636,7 @@ export class OfflineAuthService {
 
       const cachedUser = await this.getCachedUser();
 
-      log("✅ Login online exitoso:", email);
+
 
       return {
         success: true,
@@ -666,13 +644,13 @@ export class OfflineAuthService {
         isOffline: false,
       };
     } catch (error: any) {
-      log("❌ Error en login online:", error.code);
+
 
       if (
         error.code === "auth/network-request-failed" ||
         error.code === "auth/internal-error"
       ) {
-        log("🔄 Fallback a login offline...");
+
         return this.signInOffline(email, password);
       }
 
@@ -690,7 +668,7 @@ export class OfflineAuthService {
     password: string
   ): Promise<OfflineAuthResult> {
     try {
-      log("🔐 Intentando login offline...");
+
 
       const cached = await this.getCachedCredentials();
 
@@ -734,7 +712,7 @@ export class OfflineAuthService {
         };
       }
 
-      // ✅ Sin expiración offline (OFFLINE_SESSION_VALIDITY_MS queda reservado)
+
       void OFFLINE_SESSION_VALIDITY_MS;
 
       await this.updateCredentialsLastUsed();
@@ -743,7 +721,7 @@ export class OfflineAuthService {
       cachedUidSync = cachedUser.uid;
       this.notifyAuthStateListeners(cachedUser);
 
-      log("✅ Login offline exitoso:", email);
+
 
       return {
         success: true,
@@ -751,7 +729,7 @@ export class OfflineAuthService {
         isOffline: true,
       };
     } catch (error: any) {
-      log("❌ Error en login offline:", error);
+
       return {
         success: false,
         isOffline: true,
@@ -775,9 +753,9 @@ export class OfflineAuthService {
       }
 
       this.notifyAuthStateListeners(null);
-      log("✅ Sesión cerrada");
+
     } catch (error) {
-      log("❌ Error cerrando sesión:", error);
+
     }
   }
 
@@ -786,18 +764,18 @@ export class OfflineAuthService {
   private async attemptFirebaseRestore(): Promise<void> {
     try {
       if (auth.currentUser) {
-        log("✅ Firebase ya tiene sesión activa");
+
         return;
       }
 
       if (!this.isOnline) {
-        log("📴 Offline - no se puede restaurar Firebase");
+
         return;
       }
 
       const pending = await this.getPendingRegistration();
       if (pending) {
-        log("ℹ️ Hay registro pendiente, se omite Firebase restore");
+
         return;
       }
 
@@ -805,17 +783,17 @@ export class OfflineAuthService {
         STORAGE_KEYS.CACHED_PLAINTEXT_CREDS
       );
       if (!credsJson) {
-        log("ℹ️ No hay credenciales guardadas");
+
         return;
       }
 
       const { email, password } = JSON.parse(credsJson);
 
-      log("🔐 Intentando restaurar sesión de Firebase...");
+
       await signInWithEmailAndPassword(auth, email, password);
-      log("✅ Sesión de Firebase restaurada exitosamente");
+
     } catch (error: any) {
-      log("⚠️ No se pudo restaurar Firebase:", error.code);
+
     }
   }
 
@@ -845,9 +823,9 @@ export class OfflineAuthService {
       this.currentUser = cachedUser;
       this.notifyAuthStateListeners(cachedUser);
 
-      log("💾 Usuario cacheado:", user.email);
+
     } catch (error) {
-      log("❌ Error cacheando usuario:", error);
+
     }
   }
 
@@ -861,7 +839,7 @@ export class OfflineAuthService {
         const snap = await getDoc(ref);
         if (snap.exists()) {
           profileData = snap.data();
-          log(`💾 Perfil encontrado en colección: ${col}`);
+
           break;
         }
       }
@@ -893,9 +871,8 @@ export class OfflineAuthService {
       this.currentUser = updatedUser;
       this.notifyAuthStateListeners(updatedUser);
 
-      log("✅ Perfil cacheado/actualizado");
     } catch (error) {
-      log("❌ Error cacheando perfil:", error);
+
     }
   }
 
@@ -904,7 +881,7 @@ export class OfflineAuthService {
       const data = await AsyncStorage.getItem(STORAGE_KEYS.CACHED_USER);
       return data ? JSON.parse(data) : null;
     } catch (error) {
-      log("❌ Error obteniendo usuario:", error);
+
       return null;
     }
   }
@@ -932,9 +909,9 @@ export class OfflineAuthService {
         JSON.stringify(credentials)
       );
 
-      log("💾 Credenciales cacheadas");
+
     } catch (error) {
-      log("❌ Error cacheando credenciales:", error);
+
     }
   }
 
@@ -958,7 +935,7 @@ export class OfflineAuthService {
         );
       }
     } catch (error) {
-      log("❌ Error actualizando credenciales:", error);
+
     }
   }
 
@@ -974,7 +951,6 @@ export class OfflineAuthService {
       const cachedUser = await this.getCachedUser();
 
       if (cachedUser) {
-        log("✅ Sesión restaurada desde caché");
         this.currentUser = cachedUser;
         cachedUidSync = cachedUser.uid;
         this.notifyAuthStateListeners(cachedUser);
@@ -983,7 +959,7 @@ export class OfflineAuthService {
 
       return null;
     } catch (error) {
-      log("❌ Error restaurando sesión:", error);
+
       return null;
     }
   }
@@ -1000,10 +976,10 @@ export class OfflineAuthService {
         await auth.currentUser.reload();
         await this.cacheUserFromFirebase(auth.currentUser);
         await this.cacheUserProfile(auth.currentUser.uid);
-        log("✅ Sesión sincronizada");
+
       }
     } catch (error) {
-      log("❌ Error sincronizando:", error);
+
     }
   }
 
@@ -1020,9 +996,9 @@ export class OfflineAuthService {
       ]);
       this.currentUser = null;
       cachedUidSync = null;
-      log("🗑️ Caché limpiada");
+
     } catch (error) {
-      log("❌ Error limpiando caché:", error);
+
     }
   }
 
@@ -1066,7 +1042,7 @@ export class OfflineAuthService {
         }
       }
     } catch (error) {
-      log("❌ Error en getCurrentUidAsync:", error);
+
     }
 
     return null;
@@ -1103,7 +1079,8 @@ export class OfflineAuthService {
     callback: (user: CachedUser | null) => void
   ): () => void {
     this.authStateListeners.add(callback);
-    callback(this.currentUser);3
+    callback(this.currentUser);
+    3;
     return () => this.authStateListeners.delete(callback);
   }
 

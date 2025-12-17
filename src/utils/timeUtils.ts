@@ -1,6 +1,6 @@
 // src/utils/timeUtils.ts
 
-// 🔹 Normaliza entradas tipo "0830", "8:3", "8", etc. a "HH:MM"
+// Normaliza entradas tipo "0830", "8:3", "8", etc. a "HH:MM"
 export const normalizeTime = (value: string): string => {
   const digits = value.replace(/\D/g, "");
   if (!digits) return "";
@@ -32,11 +32,7 @@ export const normalizeTime = (value: string): string => {
   return `${hhStr}:${mmStr}`;
 };
 
-/**
- * 🔹 clampTime: se usa cuando ya tienes algo tipo "8", "830", "08:3"
- * y quieres forzar que termine como HH:MM válido (00–23 / 00–59).
- * Útil para citas, hábitos, intervalos, etc.
- */
+
 export function clampTime(hhmm: string): string {
   const m = /^(\d{1,2})(?::?(\d{1,2}))?$/.exec(hhmm.replace(/\s/g, ""));
   if (!m) return "";
@@ -50,8 +46,7 @@ export function clampTime(hhmm: string): string {
   if (mi > 59) mi = 59;
   return `${String(h).padStart(2, "0")}:${String(mi).padStart(2, "0")}`;
 }
-
-// 🔹 "HH:MM" -> Date (para iniciar el DateTimePicker)
+// "HH:MM" -> Date 
 export function parseHHMMToDate(hhmm?: string): Date {
   const now = new Date();
   if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) {
@@ -69,7 +64,7 @@ export function parseHHMMToDate(hhmm?: string): Date {
   );
 }
 
-// 🔹 Formato bonito en 12h con am/pm (para mostrar en los botones)
+// Formato  en 12h con am/pm 
 export function formatHHMMDisplay(hhmm?: string): string {
   if (!hhmm || !/^\d{1,2}:\d{2}$/.test(hhmm)) return "Seleccionar hora";
   const [h, m] = hhmm.split(":").map((n) => parseInt(n, 10));

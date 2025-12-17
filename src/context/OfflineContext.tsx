@@ -1,13 +1,12 @@
 // src/context/OfflineContext.tsx
-// ⚠️ IMPORTANTE: Guardar con extensión .tsx
 
 import React, {
-  createContext, // crea un contexto global
-  useContext, // hook para consumir el contexto
-  useEffect, // hook para efectos secundarios
-  useState, // hook para manejar estado
-  useCallback, // hook para memorizar funciones
-  ReactNode, // tipo para children
+  createContext,
+  useContext, 
+  useEffect,
+  useState, 
+  useCallback,
+  ReactNode, 
 } from "react";
 import NetInfo, { NetInfoState } from "@react-native-community/netinfo";
 // NetInfo permite detectar cambios de conectividad en React Native
@@ -15,134 +14,153 @@ import NetInfo, { NetInfoState } from "@react-native-community/netinfo";
 import { syncQueueService } from "../services/offline/SyncQueueService";
 // Servicio que maneja la cola de operaciones offline pendientes
 
-// Definición de la forma del contexto
 interface OfflineContextValue {
-  isOnline: boolean; // indica si hay conexión a internet
-  pendingOperations: number; // número de operaciones pendientes de sincronizar
-  isSyncing: boolean; // indica si se está sincronizando actualmente
-  lastSyncTime: Date | null; // última vez que se sincronizó
-  syncNow: () => Promise<void>; // función para forzar sincronización manual
+  isOnline: boolean; // Indica si el dispositivo tiene conexión a internet
+  pendingOperations: number; // Número de operaciones pendientes en la cola offline
+  isSyncing: boolean; // Indica si se está sincronizando actualmente
+  lastSyncTime: Date | null; // Fecha y hora de la última sincronización exitosa
+  syncNow: () => Promise<void>; // Función para forzar la sincronización manual
 }
 
-// Valores por defecto del contexto
+/* =====================================================
+   Valores por defecto del contexto
+   (se usan si un componente consume el contexto
+    fuera del Provider, evitando errores)
+===================================================== */
+
 const defaultValue: OfflineContextValue = {
-  isOnline: true,
-  pendingOperations: 0,
-  isSyncing: false,
-  lastSyncTime: null,
-  syncNow: async () => {}, // función vacía por defecto
+  isOnline: true, // Por defecto se asume online
+  pendingOperations: 0, // Sin operaciones pendientes
+  isSyncing: false, // No está sincronizando
+  lastSyncTime: null, // Aún no hay sincronización
+  syncNow: async () => {}, // Función vacía por defecto
 };
 
-// Creación del contexto
+/* Creación del contexto global */
+
 const OfflineContext = createContext<OfflineContextValue>(defaultValue);
 
-// Props del proveedor
+/* Props del Provider */
+
 interface OfflineProviderProps {
-  children: ReactNode; // componentes hijos que tendrán acceso al contexto
+  children: ReactNode; // Componentes hijos que tendrán acceso al contexto
 }
 
-// Componente proveedor del contexto
+/* Provider del contexto Offline*/
+
 export function OfflineProvider(
   props: OfflineProviderProps
 ): React.ReactElement {
-  // Estados internos
-  const [isOnline, setIsOnline] = useState(true); // estado de conexión
-  const [pendingOperations, setPendingOperations] = useState(0); // operaciones pendientes
-  const [isSyncing, setIsSyncing] = useState(false); // estado de sincronización
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null); // última sincronización
+  /* Estados internos del contexto */
 
-  // Función para sincronizar manualmente
+  const [isOnline, setIsOnline] = useState(true); // Estado de conectividad
+  const [pendingOperations, setPendingOperations] = useState(0); // Cola pendiente
+  const [isSyncing, setIsSyncing] = useState(false); // Estado de sincronización
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null); // Última sync
+
+  /* Función para sincronizar manualmente */
+
   const syncNow = useCallback(async () => {
-    // Evita sincronizar si ya está en proceso o si no hay conexión
+    // Evita sincronizar si ya hay un proceso activo o si no hay internet
     if (isSyncing || !isOnline) return;
 
-    setIsSyncing(true);
+    setIsSyncing(true); // Marca que la sincronización comenzó
     try {
-      // Procesa la cola de operaciones pendientes
+      // Procesa la cola de operaciones offline (CREATE, UPDATE, DELETE)
       await syncQueueService.processQueue();
+
       // Obtiene el número actualizado de operaciones pendientes
       const count = await syncQueueService.getPendingCount();
-      setPendingOperations(count);
-      // Actualiza la hora de última sincronización
+      setPendingOperations(count); // Actualiza el estado
+
+      // Guarda la fecha de la última sincronización exitosa
       setLastSyncTime(new Date());
     } catch {
-      // Si falla, no muestra error (fallo silencioso)
+      // Fallo silencioso: no se rompe la app si algo falla
     } finally {
-      // Siempre desactiva el estado de sincronización
-      setIsSyncing(false);
+      setIsSyncing(false); // Finaliza el estado de sincronización
     }
   }, [isSyncing, isOnline]);
 
-  // Efecto para escuchar cambios de conectividad
+  /* Efecto: escuchar cambios de conectividad*/
+
   useEffect(() => {
     const handleConnectivityChange = (state: NetInfoState) => {
-      // Determina si hay conexión real
+      // Determina si hay conexión real a internet
       const online =
         state.isConnected === true && state.isInternetReachable !== false;
-      const wasOffline = !isOnline;
-      setIsOnline(online);
 
-      // Si se reconecta después de estar offline → auto-sync
+      const wasOffline = !isOnline; // Guarda el estado anterior
+      setIsOnline(online); // Actualiza el estado actual
+
+      // Si vuelve la conexión después de estar offline → sincroniza automáticamente
       if (online && wasOffline) {
         syncNow();
       }
     };
 
-    // Suscripción a cambios de red
+    // Se suscribe a cambios de red
     const unsubscribe = NetInfo.addEventListener(handleConnectivityChange);
 
-    // Chequeo inicial de conectividad
+    // Verificación inicial del estado de conexión
     NetInfo.fetch().then(handleConnectivityChange);
 
-    // Limpieza de la suscripción
+    // Limpieza del listener al desmontar
     return () => unsubscribe();
   }, [isOnline, syncNow]);
 
-  // Efecto para actualizar periódicamente el número de operaciones pendientes
+  /* Efecto: actualizar periódicamente operaciones pendientes*/
+
   useEffect(() => {
     const updatePending = async () => {
       try {
+        // Consulta cuántas operaciones siguen pendientes
         const count = await syncQueueService.getPendingCount();
-        setPendingOperations(count);
+        setPendingOperations(count); // Actualiza el estado
       } catch {
         // Fallo silencioso
       }
     };
 
-    // Actualización inicial
-    updatePending();
-    // Intervalo cada 5 segundos
+    updatePending(); // Actualización inicial
+
+    // Actualiza cada 5 segundos
     const interval = setInterval(updatePending, 5000);
+
+    // Limpieza del intervalo al desmontar
     return () => clearInterval(interval);
   }, []);
 
-  // Valor del contexto que se provee a los hijos
+  /*  Valor que se expone a los componentes hijos*/
+
   const value: OfflineContextValue = {
-    isOnline,
-    pendingOperations,
-    isSyncing,
-    lastSyncTime,
-    syncNow,
+    isOnline, // Estado de conectividad
+    pendingOperations, // Operaciones pendientes
+    isSyncing, // Estado de sincronización
+    lastSyncTime, // Última sincronización
+    syncNow, // Función para forzar sincronización
   };
 
-  // Renderiza el proveedor con el valor actual
+  /*  Render del Provider*/
+
   return React.createElement(
-    OfflineContext.Provider,
-    { value: value },
-    props.children
+    OfflineContext.Provider, // Provider del contexto
+    { value: value }, // Valor expuesto
+    props.children // Componentes hijos
   );
 }
 
-// Hook para consumir todo el contexto
+/*  Hook para consumir TODO el contexto*/
+
 export function useOffline(): OfflineContextValue {
-  return useContext(OfflineContext);
+  return useContext(OfflineContext); // Devuelve el contexto completo
 }
 
-// Hook simplificado para obtener solo el estado de conexión
+/* Hook simplificado para solo saber si hay internet*/
+
 export function useIsOnline(): boolean {
-  const { isOnline } = useOffline();
+  const { isOnline } = useOffline(); // Extrae solo isOnline
   return isOnline;
 }
 
-// Exportación por defecto del contexto
 export default OfflineContext;

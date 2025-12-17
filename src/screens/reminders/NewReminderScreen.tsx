@@ -1,39 +1,25 @@
 // src/screens/reminders/NewReminderScreen.tsx
 
-import React, { useEffect, useMemo, useState } from "react";
+
+import React from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { COLORS, FONT_SIZES } from "../../../types";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../navigation/StackNavigator";
+import { useRoute, RouteProp } from "@react-navigation/native";
 
-import { useRoute, RouteProp, useFocusEffect } from "@react-navigation/native";
-import { offlineAuthService } from "../../services/offline/OfflineAuthService";
-// 🔥 Firebase Auth
-import { auth, db } from "../../config/firebaseConfig";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
-
-// 🔹 Servicio de hábitos
-import { type HabitWithArchive } from "../../services/habitsService";
-
-// ⏰ Utils
+import { OfflineBanner } from "../../components/OfflineBanner";
 import { formatHHMMDisplay } from "../../utils/timeUtils";
 
-// ✅ Imports agregados (Sync)
-import { syncQueueService } from "../../services/offline/SyncQueueService";
-import NetInfo from "@react-native-community/netinfo";
-import { OfflineBanner } from "../../components/OfflineBanner";
-
-// ✅ CAMBIO 5: Actualizar imports
-import { archiveHabit } from "../../utils/archiveHelpers";
+import { useHabits } from "../../hooks/useHabits";
 
 type Nav = StackNavigationProp<RootStackParamList, "NewReminder">;
 type Route = RouteProp<RootStackParamList, "NewReminder">;
@@ -43,341 +29,19 @@ const DAY_LABELS = ["L", "M", "X", "J", "V", "S", "D"];
 export default function NewReminderScreen({ navigation }: { navigation: Nav }) {
   const route = useRoute<Route>();
 
-  const [habits, setHabits] = useState<HabitWithArchive[]>([]);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const {
+    habits,
+    selectedId,
+    selectedHabit,
+    loading,
+    pendingChanges,
+    isCaregiverView,
 
-  // ✅ Estados agregados
-  const [isOnline, setIsOnline] = useState(true);
-  const [isFromCache, setIsFromCache] = useState(false);
-  const [pendingChanges, setPendingChanges] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  // 🔑 dueño real de los hábitos (paciente o usuario logueado)
-  const loggedUserUid =
-    auth.currentUser?.uid || offlineAuthService.getCurrentUid();
-  const ownerUid = route.params?.patientUid ?? loggedUserUid ?? null;
-  const isCaregiverView =
-    !!route.params?.patientUid && route.params.patientUid !== loggedUserUid;
-  const canModify = ownerUid === loggedUserUid;
-
-  // ✅ CAMBIO 1: Simplificar reloadFromCache
-  const reloadFromCache = React.useCallback(async () => {
-    if (!ownerUid) return;
-
-    try {
-      console.log("🔄 Recargando hábitos desde cache...");
-
-      const cached = await syncQueueService.getFromCache<any>(
-        "habits",
-        ownerUid
-      );
-
-      if (cached?.data && cached.data.length > 0) {
-        const items = cached.data.filter(
-          (h: any) => !h.isArchived
-        ) as HabitWithArchive[];
-
-        console.log(`✅ Mostrando ${items.length} hábitos`);
-        setHabits(items);
-        setIsFromCache(true);
-      }
-    } catch (error) {
-      console.log("Error cache hábitos:", error);
-    }
-  }, [ownerUid]);
-
-  // ✅ useFocusEffect para recargar cache - YA ESTÁ PRESENTE:
-  useFocusEffect(
-    React.useCallback(() => {
-      console.log("👁️ NewReminderScreen recibió el foco");
-      reloadFromCache();
-    }, [reloadFromCache])
-  );
-  // ================== CONNECTIVITY MONITOR ==================
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      const online =
-        state.isConnected === true && state.isInternetReachable !== false;
-      setIsOnline(online);
-
-      if (online) {
-        syncQueueService.processQueue().then(() => {
-          syncQueueService.getPendingCount().then(setPendingChanges);
-        });
-      }
-    });
-
-    syncQueueService.getPendingCount().then(setPendingChanges);
-    return () => unsubscribe();
-  }, []);
-
-  // ✅ Cargar hábitos desde cache al iniciar
-  useEffect(() => {
-    const loadFromCache = async () => {
-      const userId =
-        auth.currentUser?.uid || offlineAuthService.getCurrentUid();
-      if (!userId) return;
-
-      try {
-        const cached = await syncQueueService.getFromCache("habits", userId);
-        if (cached && cached.data.length > 0) {
-          console.log("📦 Hábitos desde cache:", cached.data.length);
-          const items = cached.data.filter(
-            (h: any) => !h.isArchived
-          ) as HabitWithArchive[];
-          setHabits(items);
-        }
-      } catch (error) {
-        console.log("Error cache hábitos:", error);
-      }
-    };
-
-    loadFromCache();
-  }, []);
-
-  // ================== Cargar hábitos activos ==================
-  useEffect(() => {
-    const userId = ownerUid;
-    if (!userId) return;
-
-    let isMounted = true;
-    let unsubscribe: (() => void) | null = null;
-
-    const loadHabits = async () => {
-      try {
-        setLoading(true);
-
-        // 1. Cargar desde cache
-        const cached = await syncQueueService.getFromCache<any>(
-          "habits",
-          userId
-        );
-
-        if (cached?.data && isMounted) {
-          console.log(`📦 Cache: ${cached.data.length} hábitos`);
-          const processedHabits = cached.data.map((data: any) => ({
-            id: data.id,
-            name: data.name || "",
-            icon: data.icon,
-            lib: data.lib,
-            priority: data.priority,
-            days: data.days || [],
-            times: data.times || [],
-          }));
-
-          setHabits(processedHabits);
-          setIsFromCache(true);
-          setLoading(false);
-        }
-
-        // 2. Listener de Firebase
-        const habitsRef = collection(db, "users", userId, "habits");
-        const q = query(habitsRef);
-
-        unsubscribe = onSnapshot(
-          q,
-          async (snapshot) => {
-            if (!isMounted) return;
-
-            console.log(
-              "🔥 [FIREBASE] Snapshot:",
-              snapshot.docs.length,
-              "docs"
-            );
-
-            const items = snapshot.docs.map((d) => ({
-              id: d.id,
-              ...d.data(),
-            }));
-
-            await syncQueueService.saveToCache("habits", userId, items);
-
-            const merged = await syncQueueService.getFromCache<any>(
-              "habits",
-              userId
-            );
-
-            if (merged?.data) {
-              const finalHabits = merged.data.filter(
-                (h: any) => !h.isArchived
-              ) as HabitWithArchive[];
-
-              setHabits(finalHabits);
-              setIsFromCache(false);
-              setLoading(false);
-            }
-          },
-          (error) => {
-            console.log("❌ Firebase error:", error);
-          }
-        );
-      } catch (error) {
-        console.log("❌ Error cargando hábitos:", error);
-        if (isMounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadHabits();
-
-    return () => {
-      isMounted = false;
-      if (unsubscribe) {
-        unsubscribe();
-      }
-    };
-  }, [ownerUid]);
-  
-  const selectedHabit = useMemo(
-    () => habits.find((h) => h.id === selectedId),
-    [habits, selectedId]
-  );
-
-  // ✅ Función de crear con SyncQueue
-  const handleCreateReminder = async (reminderData: any) => {
-    try {
-      const userId =
-        auth.currentUser?.uid || offlineAuthService.getCurrentUid();
-      if (!userId) {
-        Alert.alert("Error", "No autenticado");
-        return;
-      }
-
-      const tempId = `temp_${Date.now()}_${Math.random()
-        .toString(36)
-        .substr(2, 9)}`;
-
-      const newReminder = {
-        id: tempId,
-        ...reminderData,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isArchived: false,
-      };
-
-      // Encolar operación
-      await syncQueueService.enqueue(
-        "CREATE",
-        "habits",
-        tempId,
-        userId,
-        newReminder
-      );
-      await syncQueueService.addToCacheItem("habits", userId, newReminder);
-      await syncQueueService.saveLocalData(
-        "habits",
-        tempId,
-        userId,
-        newReminder
-      );
-
-      const pending = await syncQueueService.getPendingCount();
-      setPendingChanges(pending);
-
-      Alert.alert("✅ Listo", "Recordatorio creado");
-      navigation.goBack();
-    } catch (error) {
-      console.log("Error:", error);
-      Alert.alert("Error", "No se pudo crear");
-    }
-  };
-
-  const onAdd = () => {
-    if (!canModify) {
-      Alert.alert(
-        "Solo lectura",
-        "No puedes crear hábitos para este paciente desde tu sesión."
-      );
-      return;
-    }
-
-    navigation.navigate("AddHabit", {
-      mode: "new",
-      patientUid: ownerUid ?? undefined,
-    });
-  };
-
-  const onEdit = () => {
-    if (!selectedHabit || !selectedHabit.id) {
-      Alert.alert("Selecciona un hábito", "Toca un hábito primero.");
-      return;
-    }
-
-    if (!canModify) {
-      Alert.alert(
-        "Solo lectura",
-        "No puedes editar hábitos para este paciente desde tu sesión."
-      );
-      return;
-    }
-
-    navigation.navigate("AddHabit", {
-      mode: "edit",
-      habit: selectedHabit,
-      patientUid: ownerUid ?? undefined,
-    });
-  };
-
-  // ✅ CAMBIO 3: Simplificar handleArchive
-  const handleArchive = async () => {
-    if (!selectedId) {
-      Alert.alert("Selecciona un hábito", "Toca un hábito primero.");
-      return;
-    }
-
-    if (!canModify) {
-      Alert.alert("Solo lectura", "No puedes eliminar hábitos.");
-      return;
-    }
-
-    const habitId = selectedId;
-    const habit = habits.find((h) => h.id === habitId);
-    const habitName = habit?.name ?? "este hábito";
-
-    Alert.alert(
-      "Archivar hábito",
-      `¿Seguro que quieres archivar "${habitName}"?`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Archivar",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              if (!ownerUid) return;
-
-              // ✅ Optimistic update
-              setHabits((prev) => prev.filter((h) => h.id !== habitId));
-              setSelectedId(null);
-
-              // ✅ SOLO usar archiveHabit (importar de archiveHelpers)
-              // enqueue interno actualiza cache automáticamente
-              await archiveHabit(ownerUid, habitId, habit);
-
-              // ❌ NO llamar a deleteCacheItem
-
-              setPendingChanges(await syncQueueService.getPendingCount());
-
-              Alert.alert(
-                "¡Listo!",
-                isOnline
-                  ? "Hábito archivado."
-                  : "Se sincronizará cuando haya conexión."
-              );
-            } catch (e: any) {
-              console.log("Error:", e);
-              Alert.alert("Error", e?.message ?? "Intenta nuevamente.");
-              // Restaurar UI
-              if (habit) {
-                setHabits((prev) => [...prev, habit]);
-              }
-            }
-          },
-        },
-      ]
-    );
-  };
+    toggleSelect,
+    onAdd,
+    onEdit,
+    onArchive,
+  } = useHabits({ navigation, route });
 
   const renderPriorityChip = (p?: string) => {
     const label = p === "alta" ? "Alta" : p === "baja" ? "Baja" : "Normal";
@@ -432,7 +96,6 @@ export default function NewReminderScreen({ navigation }: { navigation: Nav }) {
 
   return (
     <SafeAreaView style={styles.safe}>
-      {/* ✅ D. OfflineBanner Agregado */}
       <OfflineBanner pendingChanges={pendingChanges} />
 
       <ScrollView
@@ -476,14 +139,13 @@ export default function NewReminderScreen({ navigation }: { navigation: Nav }) {
             const IconCmp =
               h.lib === "FontAwesome5" ? FontAwesome5 : MaterialIcons;
             const selected = h.id === selectedId;
+
             return (
               <TouchableOpacity
                 key={h.id}
                 style={[styles.habitCard, selected && styles.habitCardSelected]}
                 activeOpacity={0.85}
-                onPress={() =>
-                  setSelectedId((prev) => (prev === h.id ? null : h.id!))
-                }
+                onPress={() => toggleSelect(h.id!)}
               >
                 <View style={styles.cardHeaderRow}>
                   <View style={styles.iconTitleRow}>
@@ -552,7 +214,7 @@ export default function NewReminderScreen({ navigation }: { navigation: Nav }) {
                 !selectedHabit && styles.actionDisabled,
               ]}
               disabled={!selectedHabit}
-              onPress={handleArchive}
+              onPress={onArchive}
             >
               <Text style={styles.actionText}>Eliminar</Text>
             </TouchableOpacity>
@@ -562,6 +224,7 @@ export default function NewReminderScreen({ navigation }: { navigation: Nav }) {
     </SafeAreaView>
   );
 }
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: COLORS.background },
   container: { flex: 1 },

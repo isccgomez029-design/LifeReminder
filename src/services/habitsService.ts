@@ -1,5 +1,5 @@
 // src/services/habitsService.ts
-// 🔥 Servicio de hábitos con soporte offline-first
+
 
 import { db } from "../config/firebaseConfig";
 import { collection, onSnapshot, query, where } from "firebase/firestore";
@@ -33,7 +33,7 @@ export interface HabitWithArchive {
 // ============================================================
 
 /**
- * ✅ CREAR hábito (con soporte offline)
+ * CREAR hábito (con soporte offline)
  */
 export async function createHabit(
   userId: string,
@@ -57,7 +57,7 @@ export async function createHabit(
 }
 
 /**
- * ✅ ACTUALIZAR hábito (con soporte offline)
+ * ACTUALIZAR hábito (con soporte offline)
  */
 export async function updateHabit(
   userId: string,
@@ -79,7 +79,7 @@ export async function updateHabit(
 }
 
 /**
- * ✅ ARCHIVAR hábito (con soporte offline)
+ * ARCHIVAR hábito (con soporte offline)
  */
 export async function archiveHabit(
   userId: string,
@@ -92,7 +92,7 @@ export async function archiveHabit(
 }
 
 /**
- * ✅ ELIMINAR hábito (con soporte offline)
+ *  ELIMINAR hábito (con soporte offline)
  */
 export async function deleteHabit(
   userId: string,
@@ -106,7 +106,7 @@ export async function deleteHabit(
 // ============================================================
 
 /**
- * 📖 Escuchar hábitos activos en tiempo real (con fallback a cache local)
+ *  Escuchar hábitos activos en tiempo real (con fallback a cache local)
  */
 export function listenActiveHabits(
   userId: string,
@@ -152,19 +152,18 @@ export function listenActiveHabits(
 
       onChange(sorted);
 
-      // Filter out habits without an id before caching
       const habitsWithId = sorted.filter(
         (habit): habit is HabitWithArchive & { id: string } => !!habit.id
       );
       syncQueueService.saveToCache("habits", userId, habitsWithId);
     },
     (error) => {
-      console.log("❌ Error escuchando hábitos:", error);
+
 
       // Si hay error, cargar desde cache local
       loadLocalHabits(userId).then((localHabits) => {
         if (localHabits.length > 0) {
-          console.log("📦 Cargando hábitos desde cache local");
+
           onChange(localHabits);
         }
       });
@@ -177,7 +176,7 @@ export function listenActiveHabits(
 }
 
 /**
- * 📦 Cargar hábitos desde cache local
+ *  Cargar hábitos desde cache local
  */
 async function loadLocalHabits(userId: string): Promise<HabitWithArchive[]> {
   try {
@@ -209,13 +208,13 @@ async function loadLocalHabits(userId: string): Promise<HabitWithArchive[]> {
       return (a.name || "").localeCompare(b.name || "");
     });
   } catch (error) {
-    console.log("❌ Error cargando hábitos locales:", error);
+
     return [];
   }
 }
 
 /**
- * 📖 Obtener un hábito por ID (con fallback a cache)
+ * Obtener un hábito por ID (con fallback a cache)
  */
 export async function getHabitById(
   userId: string,
@@ -258,7 +257,7 @@ export async function getHabitById(
 
     return null;
   } catch (error) {
-    console.log("❌ Error obteniendo hábito:", error);
+
 
     // Fallback a cache local
     const localData = await syncQueueService.getLocalData(

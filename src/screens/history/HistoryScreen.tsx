@@ -1,7 +1,7 @@
 // src/screens/history/HistoryScreen.tsx
-// ✅ CORREGIDO: Carga archivados desde cache Y Firebase cuando está online
 
-import React, { useEffect, useMemo, useState } from "react";
+
+import React from "react";
 import {
   View,
   Text,
@@ -15,540 +15,33 @@ import { MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { COLORS, FONT_SIZES } from "../../../types";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../navigation/StackNavigator";
-import { useRoute, RouteProp, useIsFocused } from "@react-navigation/native";
+import { useRoute, RouteProp } from "@react-navigation/native";
 
-// 🔥 Firebase
-import { auth, db } from "../../config/firebaseConfig";
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore";
-
-// ✅ Soporte offline
-import { offlineAuthService } from "../../services/offline/OfflineAuthService";
-
-// ⏰ Utils compartidos
 import { formatHHMMDisplay } from "../../utils/timeUtils";
-import {
-  formatDateTimeLabel,
-  isPastDateTime,
-  jsDowToIndex,
-} from "../../utils/dateUtils";
 
-// 🧱 Capa offline
-import { syncQueueService } from "../../services/offline/SyncQueueService";
 
-import NetInfo from "@react-native-community/netinfo";
+import { useHistory, HistoryItem } from "../../hooks/useHistory";
 
 type Nav = StackNavigationProp<RootStackParamList, "History">;
 type Route = RouteProp<RootStackParamList, "History">;
 
-/* ===================== Tipos locales ===================== */
-
-const DAY_LABELS = ["L", "M", "X", "J", "V", "S", "D"];
-
-type HistoryHabit = {
-  id: string;
-  name: string;
-  priority?: string;
-  days?: number[];
-  times?: string[];
-  archivedAt?: string | null;
-  isArchived?: boolean;
-  icon?: string;
-  lib?: string;
-};
-
-type HistoryAppointment = {
-  id: string;
-  title: string;
-  doctor?: string | null;
-  location?: string | null;
-  date?: string | null;
-  time?: string | null;
-  archivedAt?: string | null;
-  isArchived?: boolean;
-};
-
-type HistoryMedication = {
-  id: string;
-  nombre: string;
-  dosis?: string;
-  frecuencia?: string;
-  archivedAt?: string | null;
-  isArchived?: boolean;
-};
-
-type HistoryItemKind = "habit" | "appointment" | "med";
-
-type HistoryItem = {
-  id: string;
-  kind: HistoryItemKind;
-  habit?: HistoryHabit;
-  appointment?: HistoryAppointment;
-  medication?: HistoryMedication;
-  sortKey: number;
-};
-
-/* ===================== HELPERS ===================== */
-
-/**
- * ✅ FIX: Convierte cualquier formato de fecha a string ISO
- */
-function normalizeDate(dateValue: any): string | null {
-  if (!dateValue) return null;
-
-  if (typeof dateValue === "string") {
-    return dateValue;
-  }
-
-  if (dateValue.toDate && typeof dateValue.toDate === "function") {
-    return dateValue.toDate().toISOString();
-  }
-
-  if (dateValue.seconds !== undefined) {
-    return new Date(dateValue.seconds * 1000).toISOString();
-  }
-
-  if (dateValue instanceof Date) {
-    return dateValue.toISOString();
-  }
-
-  if (typeof dateValue === "number") {
-    return new Date(dateValue).toISOString();
-  }
-
-  return null;
-}
-
-/**
- * ✅ FIX: Verifica si una fecha ya pasó de forma segura
- */
-function safeIsPastDateTime(dateValue: any, timeValue?: any): boolean {
-  try {
-    const dateStr = normalizeDate(dateValue);
-    if (!dateStr) return false;
-
-    let datePart = dateStr;
-    if (dateStr.includes("T")) {
-      datePart = dateStr.split("T")[0];
-    }
-
-    let timePart: string | null = null;
-    if (timeValue) {
-      if (typeof timeValue === "string") {
-        timePart = timeValue;
-      } else if (timeValue.toDate) {
-        const d = timeValue.toDate();
-        timePart = `${d.getHours().toString().padStart(2, "0")}:${d
-          .getMinutes()
-          .toString()
-          .padStart(2, "0")}`;
-      }
-    }
-
-    return isPastDateTime(datePart, timePart);
-  } catch (error) {
-    console.log("Error en safeIsPastDateTime:", error);
-    return false;
-  }
-}
-
-/**
- * Extrae solo YYYY-MM-DD de una fecha normalizada
- */
-function extractDateOnly(normalizedDate: string | null): string | null {
-  if (!normalizedDate) return null;
-  if (normalizedDate.includes("T")) {
-    return normalizedDate.split("T")[0];
-  }
-  return normalizedDate;
-}
-
-/* ===================== Componente ===================== */
-
 export default function HistoryScreen({ navigation }: { navigation: Nav }) {
   const route = useRoute<Route>();
-  const isFocused = useIsFocused();
 
-  const [habitHistory, setHabitHistory] = useState<HistoryHabit[]>([]);
-  const [apptHistory, setApptHistory] = useState<HistoryAppointment[]>([]);
-  const [medHistory, setMedHistory] = useState<HistoryMedication[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const {
+    isLoading,
+    ownerUid,
+    isCaregiverView,
 
-  const [isOnline, setIsOnline] = useState(true);
-  const [pendingChanges, setPendingChanges] = useState(0);
+    filterType,
+    filterDay,
+    setFilterType,
+    setFilterDay,
 
-  const [filterType, setFilterType] = useState<
-    "all" | "habit" | "appointment" | "med"
-  >("all");
-  const [filterDay, setFilterDay] = useState<number | null>(null);
+    filteredItems,
+    DAY_LABELS,
+  } = useHistory({ route });
 
-  // ✅ Obtener UID con soporte offline
-  const loggedUserUid =
-    auth.currentUser?.uid || offlineAuthService.getCurrentUid();
-  const ownerUid = route.params?.patientUid ?? loggedUserUid ?? null;
-  const isCaregiverView =
-    !!route.params?.patientUid && route.params.patientUid !== loggedUserUid;
-
-  // Monitor de conectividad
-  useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state) => {
-      const online =
-        state.isConnected === true && state.isInternetReachable !== false;
-      setIsOnline(online);
-
-      if (online) {
-        syncQueueService.processQueue().then(() => {
-          syncQueueService.getPendingCount().then(setPendingChanges);
-        });
-      }
-    });
-
-    syncQueueService.getPendingCount().then(setPendingChanges);
-    return () => unsubscribe();
-  }, []);
-
-  /* ===================== Cargar historial ===================== */
-  useEffect(() => {
-    if (!ownerUid) {
-      setIsLoading(false);
-      return;
-    }
-    if (!isFocused) return;
-
-    let isCancelled = false;
-
-    const loadHistory = async () => {
-      try {
-        setIsLoading(true);
-        console.log("🔄 Cargando historial para:", ownerUid);
-
-        // Verificar estado de conexión
-        const netState = await NetInfo.fetch();
-        const online =
-          netState.isConnected === true &&
-          netState.isInternetReachable !== false;
-
-        const habitList: HistoryHabit[] = [];
-        const medsList: HistoryMedication[] = [];
-        const apptsList: HistoryAppointment[] = [];
-
-        const processedHabitIds = new Set<string>();
-        const processedMedIds = new Set<string>();
-        const processedApptIds = new Set<string>();
-
-        // ========================================
-        // 1. CARGAR DESDE CACHE (siempre primero)
-        // ========================================
-        const cachedHabits = await syncQueueService.getFromCache<any>(
-          "habits",
-          ownerUid
-        );
-        const cachedMeds = await syncQueueService.getFromCache<any>(
-          "medications",
-          ownerUid
-        );
-        const cachedAppts = await syncQueueService.getFromCache<any>(
-          "appointments",
-          ownerUid
-        );
-
-        // 🆕 Array auxiliar para re-escribir el cache de medications
-        let medCacheArray: any[] = [];
-        if (cachedMeds?.data) {
-          medCacheArray = [...cachedMeds.data];
-        }
-
-        // Procesar hábitos del cache
-        if (cachedHabits?.data) {
-          cachedHabits.data.forEach((item: any) => {
-            if (item.isArchived === true || !!item.archivedAt) {
-              habitList.push({
-                id: item.id || "unknown",
-                name: item.name || "Hábito sin nombre",
-                priority: item.priority || "normal",
-                days: item.days || [],
-                times: item.times || [],
-                archivedAt: normalizeDate(item.archivedAt),
-                isArchived: true,
-                icon: item.icon || "check-circle",
-                lib: item.lib || "MaterialIcons",
-              });
-              processedHabitIds.add(item.id);
-            }
-          });
-        }
-
-        // Procesar medicamentos del cache
-        if (cachedMeds?.data) {
-          cachedMeds.data.forEach((item: any) => {
-            if (item.isArchived === true || !!item.archivedAt) {
-              medsList.push({
-                id: item.id || "unknown",
-                nombre: item.nombre || "Medicamento sin nombre",
-                dosis:
-                  item.dosis ||
-                  `${item.doseAmount || 1} ${item.doseUnit || "tabletas"}`,
-                frecuencia: item.frecuencia || "",
-                archivedAt: normalizeDate(item.archivedAt),
-                isArchived: true,
-              });
-              processedMedIds.add(item.id);
-            }
-          });
-        }
-
-        // Procesar citas del cache
-        if (cachedAppts?.data) {
-          cachedAppts.data.forEach((item: any) => {
-            const isPast = safeIsPastDateTime(item.date, item.time);
-            if (item.isArchived === true || !!item.archivedAt || isPast) {
-              apptsList.push({
-                id: item.id || "unknown",
-                title: item.title || "Cita sin título",
-                doctor: item.doctor || null,
-                location: item.location || null,
-                date: extractDateOnly(normalizeDate(item.date)),
-                time: item.time || null,
-                archivedAt: normalizeDate(item.archivedAt),
-                isArchived: true,
-              });
-              processedApptIds.add(item.id);
-            }
-          });
-        }
-
-        console.log("📦 Desde cache:", {
-          habits: habitList.length,
-          meds: medsList.length,
-          appts: apptsList.length,
-        });
-
-        // ========================================
-        // 2. SI ESTÁ ONLINE, TAMBIÉN CARGAR DE FIREBASE
-        // ========================================
-        if (online) {
-          console.log("🔥 Cargando archivados desde Firebase...");
-
-          try {
-            // Hábitos archivados
-            const habitsRef = collection(db, "users", ownerUid, "habits");
-            const habitsQuery = query(
-              habitsRef,
-              where("isArchived", "==", true)
-            );
-            const habitsSnapshot = await getDocs(habitsQuery);
-
-            habitsSnapshot.docs.forEach((docSnap) => {
-              if (!processedHabitIds.has(docSnap.id)) {
-                const data = docSnap.data();
-                habitList.push({
-                  id: docSnap.id,
-                  name: data.name || "Hábito sin nombre",
-                  priority: data.priority || "normal",
-                  days: data.days || [],
-                  times: data.times || [],
-                  archivedAt: normalizeDate(data.archivedAt),
-                  isArchived: true,
-                  icon: data.icon || "check-circle",
-                  lib: data.lib || "MaterialIcons",
-                });
-                processedHabitIds.add(docSnap.id);
-              }
-            });
-
-            // Medicamentos archivados
-            const medsRef = collection(db, "users", ownerUid, "medications");
-            const medsQuery = query(medsRef, where("isArchived", "==", true));
-            const medsSnapshot = await getDocs(medsQuery);
-
-            medsSnapshot.docs.forEach((docSnap) => {
-              if (!processedMedIds.has(docSnap.id)) {
-                const data = docSnap.data();
-                medsList.push({
-                  id: docSnap.id,
-                  nombre: data.nombre || "Medicamento sin nombre",
-                  dosis:
-                    data.dosis ||
-                    `${data.doseAmount || 1} ${data.doseUnit || "tabletas"}`,
-                  frecuencia: data.frecuencia || "",
-                  archivedAt: normalizeDate(data.archivedAt),
-                  isArchived: true,
-                });
-                processedMedIds.add(docSnap.id);
-              }
-
-              // 🆕 Asegurarnos de que también queden en el cache
-              if (!medCacheArray.some((m) => m.id === docSnap.id)) {
-                medCacheArray.push({
-                  id: docSnap.id,
-                  ...docSnap.data(),
-                });
-              }
-            });
-
-            // Citas archivadas
-            const apptsRef = collection(db, "users", ownerUid, "appointments");
-            const apptsQuery = query(apptsRef, where("isArchived", "==", true));
-            const apptsSnapshot = await getDocs(apptsQuery);
-
-            apptsSnapshot.docs.forEach((docSnap) => {
-              if (!processedApptIds.has(docSnap.id)) {
-                const data = docSnap.data();
-                apptsList.push({
-                  id: docSnap.id,
-                  title: data.title || "Cita sin título",
-                  doctor: data.doctor || null,
-                  location: data.location || null,
-                  date: extractDateOnly(normalizeDate(data.date)),
-                  time: data.time || null,
-                  archivedAt: normalizeDate(data.archivedAt),
-                  isArchived: true,
-                });
-                processedApptIds.add(docSnap.id);
-              }
-            });
-
-            // Citas pasadas no archivadas
-            const allApptsSnapshot = await getDocs(apptsRef);
-            allApptsSnapshot.docs.forEach((docSnap) => {
-              if (!processedApptIds.has(docSnap.id)) {
-                const data = docSnap.data();
-                const isPast = safeIsPastDateTime(data.date, data.time);
-                if (isPast) {
-                  apptsList.push({
-                    id: docSnap.id,
-                    title: data.title || "Cita sin título",
-                    doctor: data.doctor || null,
-                    location: data.location || null,
-                    date: extractDateOnly(normalizeDate(data.date)),
-                    time: data.time || null,
-                    archivedAt: null,
-                    isArchived: false,
-                  });
-                  processedApptIds.add(docSnap.id);
-                }
-              }
-            });
-
-            console.log("🔥 Desde Firebase (adicionales):", {
-              habits: habitsSnapshot.docs.length,
-              meds: medsSnapshot.docs.length,
-              appts: apptsSnapshot.docs.length,
-            });
-
-            // 🆕 GUARDAR EL NUEVO CACHE DE MEDS (activos + archivados)
-            try {
-              await syncQueueService.saveToCache(
-                "medications",
-                ownerUid,
-                medCacheArray
-              );
-              console.log(
-                `💾 Cache de medications actualizado (total en cache: ${medCacheArray.length})`
-              );
-            } catch (cacheErr) {
-              console.log("⚠️ No se pudo actualizar cache de meds:", cacheErr);
-            }
-          } catch (firebaseError) {
-            console.log("⚠️ Error cargando de Firebase:", firebaseError);
-          }
-        }
-
-        // ========================================
-        // 3. ORDENAR Y ACTUALIZAR ESTADO
-        // ========================================
-        if (!isCancelled) {
-          const sortByArchiveDate = (a: any, b: any) => {
-            const da = a.archivedAt ? Date.parse(a.archivedAt) : 0;
-            const db = b.archivedAt ? Date.parse(b.archivedAt) : 0;
-            return db - da;
-          };
-
-          habitList.sort(sortByArchiveDate);
-          medsList.sort(sortByArchiveDate);
-          apptsList.sort(sortByArchiveDate);
-
-          setHabitHistory(habitList);
-          setMedHistory(medsList);
-          setApptHistory(apptsList);
-
-          console.log("✅ Historial cargado (total):");
-          console.log(`   - Hábitos archivados: ${habitList.length}`);
-          console.log(`   - Medicamentos archivados: ${medsList.length}`);
-          console.log(`   - Citas archivadas/pasadas: ${apptsList.length}`);
-        }
-      } catch (error) {
-        console.log("❌ Error cargando historial:", error);
-      } finally {
-        if (!isCancelled) {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    loadHistory();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [ownerUid, isFocused]);
-
-  /* ===================== Combinar y filtrar items ===================== */
-  const allItems: HistoryItem[] = useMemo(() => {
-    const items: HistoryItem[] = [];
-
-    habitHistory.forEach((h) => {
-      const ts = h.archivedAt ? Date.parse(h.archivedAt) : 0;
-      items.push({
-        id: h.id,
-        kind: "habit",
-        habit: h,
-        sortKey: ts,
-      });
-    });
-
-    medHistory.forEach((m) => {
-      const ts = m.archivedAt ? Date.parse(m.archivedAt) : 0;
-      items.push({
-        id: m.id,
-        kind: "med",
-        medication: m,
-        sortKey: ts,
-      });
-    });
-
-    apptHistory.forEach((a) => {
-      const ts = a.archivedAt ? Date.parse(a.archivedAt) : 0;
-      items.push({
-        id: a.id,
-        kind: "appointment",
-        appointment: a,
-        sortKey: ts,
-      });
-    });
-
-    return items.sort((x, y) => y.sortKey - x.sortKey);
-  }, [habitHistory, medHistory, apptHistory]);
-
-  const filteredItems = useMemo(() => {
-    let filtered = allItems;
-
-    if (filterType !== "all") {
-      filtered = filtered.filter((it) => it.kind === filterType);
-    }
-
-    if (filterDay !== null) {
-      filtered = filtered.filter((it) => {
-        if (it.kind === "habit" && it.habit) {
-          return it.habit.days?.includes(filterDay) ?? false;
-        }
-        return false;
-      });
-    }
-
-    return filtered;
-  }, [allItems, filterType, filterDay]);
-
-  /* ===================== Render Cards ===================== */
   const renderItemCard = (item: HistoryItem) => {
     if (item.kind === "habit" && item.habit) {
       const h = item.habit;
@@ -705,7 +198,6 @@ export default function HistoryScreen({ navigation }: { navigation: Nav }) {
     return null;
   };
 
-  /* ===================== UI Principal ===================== */
   if (!ownerUid) {
     return (
       <View style={styles.container}>
@@ -729,8 +221,6 @@ export default function HistoryScreen({ navigation }: { navigation: Nav }) {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-        {/* Banner offline */}
-
         <ScrollView contentContainerStyle={styles.content}>
           <Text style={styles.title}>
             {isCaregiverView ? "Historial del paciente" : "Mi historial"}
@@ -747,7 +237,6 @@ export default function HistoryScreen({ navigation }: { navigation: Nav }) {
             </View>
           )}
 
-          {/* Filtros */}
           <View style={styles.filtersBlock}>
             <Text style={styles.filterLabel}>Filtrar por tipo:</Text>
             <View style={styles.filterRow}>

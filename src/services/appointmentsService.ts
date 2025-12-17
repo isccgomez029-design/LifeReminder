@@ -1,5 +1,5 @@
 // src/services/appointmentsService.ts
-// 🔥 Servicio de citas con soporte offline-first
+
 
 import { db } from "../config/firebaseConfig";
 import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
@@ -19,6 +19,7 @@ export interface Appointment {
   eventId?: string | null;
   createdAt?: any;
   updatedAt?: any;
+  isArchived?: boolean;
 }
 
 // ============================================================
@@ -27,17 +28,18 @@ export interface Appointment {
 
 export async function createAppointment(
   userId: string,
-  data: Appointment
+  data: Appointment,
+  forcedId?: string
 ): Promise<string> {
-  const tempId = `temp_${Date.now()}_${Math.random()
-    .toString(36)
-    .substr(2, 9)}`;
+  const tempId =
+    forcedId ?? `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
   const appointmentData = {
     ...data,
-    createdAt: new Date().toISOString(),
+    createdAt: data.createdAt ?? new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     _createdLocally: true,
+    isArchived: data.isArchived ?? false,
   };
 
   await syncQueueService.enqueue(
@@ -45,7 +47,7 @@ export async function createAppointment(
     "appointments",
     tempId,
     userId,
-    appointmentData
+    appointmentData as any
   );
 
   return tempId;
@@ -66,7 +68,7 @@ export async function updateAppointment(
     "appointments",
     appointmentId,
     userId,
-    updateData
+    updateData as any
   );
 }
 
@@ -113,7 +115,7 @@ export function listenAppointments(
         (doc) =>
           ({
             id: doc.id,
-            ...doc.data(),
+            ...(doc.data() as any),
           } as Appointment)
       );
 
@@ -123,7 +125,7 @@ export function listenAppointments(
       const apptsWithId = appointments.filter(
         (a): a is Appointment & { id: string } => !!a.id
       );
-      syncQueueService.saveToCache("appointments", userId, apptsWithId);
+      syncQueueService.saveToCache("appointments", userId, apptsWithId as any);
     },
     (error) => {
       loadLocalAppointments(userId).then((localAppts) => {
@@ -147,13 +149,13 @@ async function loadLocalAppointments(userId: string): Promise<Appointment[]> {
     );
 
     if (cached && cached.data) {
-      return cached.data.sort((a, b) => {
+      return (cached.data as any[]).sort((a, b) => {
         return (a.date || "").localeCompare(b.date || "");
-      });
+      }) as Appointment[];
     }
 
     return [];
-  } catch (error) {
+  } catch {
     return [];
   }
 }
@@ -170,7 +172,7 @@ export async function getAppointmentById(
     if (docSnap.exists()) {
       return {
         id: docSnap.id,
-        ...docSnap.data(),
+        ...(docSnap.data() as any),
       } as Appointment;
     }
 
@@ -180,19 +182,19 @@ export async function getAppointmentById(
       userId
     );
     if (cached && cached.data) {
-      const found = cached.data.find((a) => a.id === appointmentId);
-      if (found) return found;
+      const found = (cached.data as any[]).find((a) => a.id === appointmentId);
+      if (found) return found as Appointment;
     }
 
     return null;
-  } catch (error) {
+  } catch {
     const cached = await syncQueueService.getFromCache<Appointment>(
       "appointments",
       userId
     );
     if (cached && cached.data) {
-      const found = cached.data.find((a) => a.id === appointmentId);
-      if (found) return found;
+      const found = (cached.data as any[]).find((a) => a.id === appointmentId);
+      if (found) return found as Appointment;
     }
 
     return null;

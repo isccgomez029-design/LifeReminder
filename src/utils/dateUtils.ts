@@ -1,6 +1,6 @@
 // src/utils/dateUtils.ts
 
-// 🔹 YYYY-MM-DD + HH:mm -> Date
+//  YYYY-MM-DD + HH:mm -> Date
 export function buildDateTime(
   date?: string | null,
   time?: string | null
@@ -22,7 +22,7 @@ export function buildDateTime(
   return new Date(y, m - 1, d, h, mi, 0, 0);
 }
 
-// 🔹 Etiqueta bonita con fecha + hora (12h am/pm)
+//  Etiqueta bonita con fecha + hora (12h am/pm)
 export function formatDateTimeLabel(
   date?: string | null,
   time?: string | null
@@ -40,7 +40,7 @@ export function formatDateTimeLabel(
   });
 }
 
-// 🔹 Saber si ya pasó
+//  Saber si ya pasó
 export function isPastDateTime(
   date?: string | null,
   time?: string | null
@@ -50,7 +50,7 @@ export function isPastDateTime(
   return dt.getTime() < Date.now();
 }
 
-// 🔹 JS getDay() -> índice 0=Lunes..6=Domingo (como tus DAY_LABELS)
+//  JS getDay() -> índice 0=Lunes..6=Domingo (como tus DAY_LABELS)
 export function jsDowToIndex(d: Date): number {
   const js = d.getDay(); // 0 domingo ... 6 sábado
   return (js + 6) % 7; // lunes = 0

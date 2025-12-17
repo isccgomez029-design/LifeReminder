@@ -1,6 +1,4 @@
-// src/services/notificationsService.ts
-// 🔔 SERVICIO UNIFICADO DE NOTIFICACIONES
-// Combina: Notificaciones locales (expo) + Notificaciones Firestore (cuidadores)
+// src/services/notifications.ts
 
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
@@ -40,9 +38,17 @@ export type CareNotification = {
   message: string;
   patientUid: string;
   patientName: string;
-  itemType: "med" | "habit";
-  itemName: string;
-  snoozeCount: number;
+
+  // meds/habits 
+  itemType?: "med" | "habit";
+  itemName?: string;
+  snoozeCount?: number;
+
+  // citas 
+  appointmentTitle?: string;
+  appointmentDateISO?: string;
+  location?: string;
+
   severity: NotificationSeverity;
   read: boolean;
   createdAt: any;
@@ -55,8 +61,7 @@ type NotifyResult = {
 };
 
 /* ============================================================
- *         📱 SECCIÓN 1: NOTIFICACIONES LOCALES (DEVICE)
- *         Usa expo-notifications para push local
+ *        NOTIFICACIONES LOCALES (DEVICE)
  * ============================================================ */
 
 // Handler global: cómo se muestran las notificaciones locales
@@ -70,7 +75,7 @@ Notifications.setNotificationHandler({
 });
 
 /**
- * 📱 Pide permisos y configura canal (Android)
+ * Pide permisos y configura canal (Android)
  */
 export async function configureNotificationPermissions(): Promise<void> {
   const { status } = await Notifications.getPermissionsAsync();
@@ -78,7 +83,7 @@ export async function configureNotificationPermissions(): Promise<void> {
   if (status !== "granted") {
     const req = await Notifications.requestPermissionsAsync();
     if (req.status !== "granted") {
-      console.log("⚠️ Permisos de notificaciones no otorgados");
+
       return;
     }
   }
@@ -90,11 +95,11 @@ export async function configureNotificationPermissions(): Promise<void> {
     });
   }
 
-  console.log("✅ Permisos de notificaciones configurados");
+
 }
 
 /**
- * 📱 Notificación inmediata local
+ *  Notificación inmediata local
  */
 export async function sendImmediateNotification(
   title: string,
@@ -107,21 +112,25 @@ export async function sendImmediateNotification(
         body,
         sound: "default",
       },
-      trigger: null, // inmediata
+      trigger: null, 
     });
-    console.log(`📱 Notificación local enviada: ${title}`);
+
   } catch (error) {
     console.error("Error enviando notificación inmediata:", error);
   }
 }
 
 /**
- * 📱 Recordatorio 24h antes de una cita
+ * Recordatorio 24h antes de una cita
+
  */
 export async function scheduleAppointmentReminder(
+  patientUid: string, 
   dateISO: string, // "2025-11-25"
   time: string | undefined, // "14:30" o undefined
-  title: string // texto de la cita (doctor o motivo)
+  title: string, // texto de la cita (doctor o motivo)
+  patientName?: string, // opcional
+  location?: string // opcional
 ): Promise<void> {
   try {
     // Hora por defecto si no viene hora
@@ -137,12 +146,11 @@ export async function scheduleAppointmentReminder(
 
     // Si ya pasó el momento del recordatorio, no programamos nada
     if (reminderDate <= new Date()) {
-      console.log(
-        "[scheduleAppointmentReminder] Hora de recordatorio ya pasó, no se agenda."
-      );
+
       return;
     }
 
+    // Aviso LOCAL para el paciente
     await Notifications.scheduleNotificationAsync({
       content: {
         title: "Recordatorio de cita médica",
@@ -152,21 +160,28 @@ export async function scheduleAppointmentReminder(
       trigger: reminderDate as any,
     });
 
-    console.log(
-      `📅 Recordatorio de cita programado para: ${reminderDate.toISOString()}`
-    );
+    // Aviso en FIRESTORE para cuidadores 
+    try {
+      await notifyCaregiversAboutAppointmentReminder({
+        patientUid,
+        patientName,
+        appointmentTitle: title,
+        appointmentDateISO: appointmentDate.toISOString(),
+        location,
+      });
+    } catch (e) {   
+    }
   } catch (err) {
     console.error("Error programando recordatorio de cita:", err);
   }
 }
 
 /* ============================================================
- *      🌐 SECCIÓN 2: NOTIFICACIONES FIRESTORE (LECTURA)
- *      Para que cuidadores vean alertas de pacientes
+ *       NOTIFICACIONES FIRESTORE 
  * ============================================================ */
 
 /**
- * 🌐 Escucha notificaciones del cuidador en tiempo real
+ * Escucha notificaciones del cuidador en tiempo real
  * @param userId - UID del cuidador
  * @param onData - Callback con las notificaciones
  * @param onError - Callback de error (opcional)
@@ -183,18 +198,25 @@ export function listenCaregiverNotifications(
   return onSnapshot(
     q,
     (snapshot) => {
-      const list: CareNotification[] = snapshot.docs.map((doc) => {
-        const data = doc.data() as any;
+      const list: CareNotification[] = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data() as any;
         return {
-          id: doc.id,
+          id: docSnap.id,
           type: data.type || "noncompliance",
           title: data.title || "Notificación",
           message: data.message || "",
           patientUid: data.patientUid || "",
           patientName: data.patientName || "Paciente",
-          itemType: data.itemType || "med",
-          itemName: data.itemName || "",
-          snoozeCount: data.snoozeCount || 0,
+
+
+          itemType: data.itemType,
+          itemName: data.itemName,
+          snoozeCount: data.snoozeCount,
+
+          appointmentTitle: data.appointmentTitle,
+          appointmentDateISO: data.appointmentDateISO,
+          location: data.location,
+
           severity: data.severity || "medium",
           read: !!data.read,
           createdAt: data.createdAt,
@@ -211,7 +233,7 @@ export function listenCaregiverNotifications(
 }
 
 /**
- * 🌐 Marca una notificación como leída
+ *  Marca una notificación como leída
  */
 export async function markNotificationAsRead(
   userId: string,
@@ -220,7 +242,6 @@ export async function markNotificationAsRead(
   try {
     const notifRef = doc(db, "users", userId, "notifications", notificationId);
     await updateDoc(notifRef, { read: true });
-    console.log(`✅ Notificación ${notificationId} marcada como leída`);
   } catch (error) {
     console.error("Error marcando notificación como leída:", error);
     throw error;
@@ -228,7 +249,7 @@ export async function markNotificationAsRead(
 }
 
 /**
- * 🌐 Marca múltiples notificaciones como leídas
+ * Marca múltiples notificaciones como leídas
  */
 export async function markMultipleAsRead(
   userId: string,
@@ -239,9 +260,7 @@ export async function markMultipleAsRead(
       markNotificationAsRead(userId, id)
     );
     await Promise.all(promises);
-    console.log(
-      `✅ ${notificationIds.length} notificaciones marcadas como leídas`
-    );
+
   } catch (error) {
     console.error("Error marcando múltiples notificaciones:", error);
     throw error;
@@ -249,13 +268,114 @@ export async function markMultipleAsRead(
 }
 
 /* ============================================================
- *      🌐 SECCIÓN 3: NOTIFICACIONES FIRESTORE (ESCRITURA)
- *      Para que pacientes notifiquen a cuidadores
+ *      NOTIFICACIONES FIRESTORE 
  * ============================================================ */
 
 /**
- * 🌐 Notificar a los cuidadores sobre incumplimiento de medicación/hábito
- * Se llama cuando el paciente pospone 3+ veces
+ * Notificar a cuidadores: recordatorio de cita (1 día antes)
+ */
+export async function notifyCaregiversAboutAppointmentReminder(params: {
+  patientUid: string;
+  patientName?: string;
+  appointmentTitle: string;
+  appointmentDateISO: string; // ISO real de la cita
+  location?: string;
+}): Promise<NotifyResult> {
+  try {
+    const {
+      patientUid,
+      patientName,
+      appointmentTitle,
+      appointmentDateISO,
+      location,
+    } = params;
+
+    //  Buscar cuidadores activos del paciente
+    const careNetworkRef = collection(db, "users", patientUid, "careNetwork");
+    const q = query(
+      careNetworkRef,
+      where("status", "==", "accepted"),
+      where("deleted", "==", false)
+    );
+
+    const snapshot = await getDocs(q);
+
+    if (snapshot.empty) {
+
+      return { success: true, notifiedCount: 0 };
+    }
+
+    const patientDisplay = patientName || "Un paciente";
+
+    const dt = new Date(appointmentDateISO);
+    const dateText = isNaN(dt.getTime())
+      ? appointmentDateISO
+      : dt.toLocaleString("es-MX", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: true,
+        });
+
+    const baseMsg = `Mañana ${patientDisplay} tiene su cita: "${appointmentTitle}" (${dateText}).`;
+    const message = location ? `${baseMsg} 📍 ${location}` : baseMsg;
+
+    // Crear notificación para cada cuidador
+    const notificationPromises = snapshot.docs.map(async (docSnap) => {
+      const caregiverData = docSnap.data() as any;
+      const caregiverUid = caregiverData.caregiverUid;
+
+      // Solo notificar si el modo de acceso permite alertas
+      const accessMode = caregiverData.accessMode || "alerts-only";
+      if (accessMode === "disabled") {
+
+        return false;
+      }
+
+      if (!caregiverUid) {
+
+        return false;
+      }
+
+      const notificationsRef = collection(
+        db,
+        "users",
+        caregiverUid,
+        "notifications"
+      );
+
+      await addDoc(notificationsRef, {
+        type: "appointment",
+        title: "🗓️ Recordatorio de cita médica",
+        message,
+        patientUid,
+        patientName: patientName || "Paciente",
+        appointmentTitle,
+        appointmentDateISO,
+        location: location || null,
+        severity: "medium",
+        read: false,
+        createdAt: serverTimestamp(),
+      });
+
+      return true;
+    });
+
+    const results = await Promise.all(notificationPromises);
+    const notifiedCount = results.filter(Boolean).length;
+
+    return { success: true, notifiedCount };
+  } catch (error: any) {
+    console.error("❌ Error notificando cita a cuidadores:", error);
+    return { success: false, notifiedCount: 0, error: error?.message };
+  }
+}
+
+/**
+ *  Notificar a los cuidadores sobre incumplimiento de medicación/hábito
  */
 export async function notifyCaregiversAboutNoncompliance(params: {
   patientUid: string;
@@ -279,26 +399,24 @@ export async function notifyCaregiversAboutNoncompliance(params: {
     const snapshot = await getDocs(q);
 
     if (snapshot.empty) {
-      console.log("⚠️ No hay cuidadores activos para notificar");
+
       return { success: true, notifiedCount: 0 };
     }
 
-    // 🔨 Crear notificación para cada cuidador
-    const notificationPromises = snapshot.docs.map(async (doc) => {
-      const caregiverData = doc.data();
+    // Crear notificación para cada cuidador
+    const notificationPromises = snapshot.docs.map(async (docSnap) => {
+      const caregiverData = docSnap.data() as any;
       const caregiverUid = caregiverData.caregiverUid;
 
       // Solo notificar si el modo de acceso permite alertas
       const accessMode = caregiverData.accessMode || "alerts-only";
       if (accessMode === "disabled") {
-        console.log(
-          `⏭️ Cuidador ${doc.id} tiene acceso desactivado, omitiendo`
-        );
+
         return false;
       }
 
       if (!caregiverUid) {
-        console.log("⚠️ Cuidador sin UID:", doc.id);
+
         return false;
       }
 
@@ -310,7 +428,6 @@ export async function notifyCaregiversAboutNoncompliance(params: {
         "notifications"
       );
 
-      const itemType = type === "med" ? "medicamento" : "hábito";
       const patientDisplay = patientName || "Un paciente";
 
       await addDoc(notificationsRef, {
@@ -327,16 +444,12 @@ export async function notifyCaregiversAboutNoncompliance(params: {
         createdAt: serverTimestamp(),
       });
 
-      console.log(
-        `✅ Notificación de incumplimiento enviada a cuidador ${caregiverUid}`
-      );
       return true;
     });
 
     const results = await Promise.all(notificationPromises);
     const notifiedCount = results.filter(Boolean).length;
 
-    console.log(`✅ Notificadas ${notifiedCount} personas de la red de apoyo`);
     return { success: true, notifiedCount };
   } catch (error: any) {
     console.error("❌ Error notificando a cuidadores:", error);
@@ -345,8 +458,7 @@ export async function notifyCaregiversAboutNoncompliance(params: {
 }
 
 /**
- * 🌐 Notificar a los cuidadores cuando el paciente DESCARTA una alarma
- * sin tomar el medicamento o completar el hábito
+ * Notificar a los cuidadores cuando el paciente DESCARTA una alarma
  */
 export async function notifyCaregiversAboutDismissal(params: {
   patientUid: string;
@@ -364,7 +476,7 @@ export async function notifyCaregiversAboutDismissal(params: {
       snoozeCountBeforeDismiss,
     } = params;
 
-    // 🔍 Buscar cuidadores activos del paciente
+    //  Buscar cuidadores activos del paciente
     const careNetworkRef = collection(db, "users", patientUid, "careNetwork");
     const q = query(
       careNetworkRef,
@@ -375,26 +487,24 @@ export async function notifyCaregiversAboutDismissal(params: {
     const snapshot = await getDocs(q);
 
     if (snapshot.empty) {
-      console.log("⚠️ No hay cuidadores activos para notificar el descarte");
+
       return { success: true, notifiedCount: 0 };
     }
 
-    // 🔨 Crear notificación para cada cuidador
-    const notificationPromises = snapshot.docs.map(async (doc) => {
-      const caregiverData = doc.data();
+    // Crear notificación para cada cuidador
+    const notificationPromises = snapshot.docs.map(async (docSnap) => {
+      const caregiverData = docSnap.data() as any;
       const caregiverUid = caregiverData.caregiverUid;
 
       // Solo notificar si el modo de acceso permite alertas
       const accessMode = caregiverData.accessMode || "alerts-only";
       if (accessMode === "disabled") {
-        console.log(
-          `⏭️ Cuidador ${doc.id} tiene acceso desactivado, omitiendo`
-        );
+
         return false;
       }
 
       if (!caregiverUid) {
-        console.log("⚠️ Cuidador sin UID:", doc.id);
+
         return false;
       }
 
@@ -409,7 +519,6 @@ export async function notifyCaregiversAboutDismissal(params: {
       const itemTypeLabel = itemType === "med" ? "medicamento" : "hábito";
       const patientDisplay = patientName || "Un paciente";
 
-      // Determinar severidad basada en si pospuso antes
       const severity =
         snoozeCountBeforeDismiss > 0
           ? "high"
@@ -417,7 +526,6 @@ export async function notifyCaregiversAboutDismissal(params: {
           ? "medium"
           : "medium";
 
-      // Mensaje más descriptivo
       let messageText = `${patientDisplay} ha descartado el ${itemTypeLabel} "${itemName}"`;
       if (snoozeCountBeforeDismiss > 0) {
         messageText += ` después de posponerlo ${snoozeCountBeforeDismiss} ${
@@ -442,18 +550,12 @@ export async function notifyCaregiversAboutDismissal(params: {
         createdAt: serverTimestamp(),
       });
 
-      console.log(
-        `✅ Notificación de descarte enviada a cuidador ${caregiverUid} sobre ${itemName}`
-      );
       return true;
     });
 
     const results = await Promise.all(notificationPromises);
     const notifiedCount = results.filter(Boolean).length;
 
-    console.log(
-      `✅ Descarte notificado a ${notifiedCount} personas de la red de apoyo`
-    );
     return { success: true, notifiedCount };
   } catch (error: any) {
     console.error("❌ Error notificando descarte a cuidadores:", error);
@@ -462,8 +564,7 @@ export async function notifyCaregiversAboutDismissal(params: {
 }
 
 /**
- * 🌐 Registrar evento de posposición en Firestore
- * (Útil para historial y análisis)
+ * Registrar evento de posposición en Firestore
  */
 export async function logSnoozeEvent(params: {
   patientUid: string;
@@ -495,17 +596,13 @@ export async function logSnoozeEvent(params: {
       timestamp: serverTimestamp(),
     });
 
-    console.log(
-      `📊 Evento de posposición registrado: ${itemName} (${snoozeCount}x)`
-    );
   } catch (error) {
     console.error("❌ Error registrando evento de posposición:", error);
   }
 }
 
 /**
- * 🌐 Registrar evento de descarte en Firestore
- * (Para historial y análisis de adherencia)
+ *  Registrar evento de descarte en Firestore
  */
 export async function logDismissalEvent(params: {
   patientUid: string;
@@ -529,14 +626,14 @@ export async function logDismissalEvent(params: {
       timestamp: serverTimestamp(),
     });
 
-    console.log(`📊 Evento de descarte registrado: ${itemName}`);
+
   } catch (error) {
     console.error("❌ Error registrando evento de descarte:", error);
   }
 }
 
 /**
- * 🌐 Registrar cumplimiento exitoso
+ *  Registrar cumplimiento exitoso
  */
 export async function logComplianceSuccess(params: {
   patientUid: string;
@@ -559,14 +656,14 @@ export async function logComplianceSuccess(params: {
       timestamp: serverTimestamp(),
     });
 
-    console.log(`✅ Cumplimiento registrado: ${itemName}`);
+
   } catch (error) {
     console.error("❌ Error registrando cumplimiento:", error);
   }
 }
 
-/* ============================================================
- *              🛠️ SECCIÓN 4: UTILIDADES Y HELPERS
+/* ===========================================================
+ *           UTILIDADES Y HELPERS
  * ============================================================ */
 
 /**

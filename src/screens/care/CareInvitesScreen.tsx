@@ -1,5 +1,5 @@
 // src/screens/care/CareInvitesScreen.tsx
-// ✅ REFACTORIZADA: Solo UI, lógica en hooks y servicios
+
 
 import React from "react";
 import {
@@ -22,9 +22,7 @@ export default function CareInvitesScreen() {
   // 🎯 Toda la lógica viene del hook
   const { invites, loading, acceptInvite, rejectInvite } = useCareInvites();
 
-  /* =========================================
-   *           📝 HANDLERS
-   * ========================================= */
+
 
   const handleAccept = async (invite: CareInvite) => {
     try {
@@ -44,9 +42,7 @@ export default function CareInvitesScreen() {
     }
   };
 
-  /* =========================================
-   *           🎨 RENDER HELPERS
-   * ========================================= */
+
 
   const renderInviteCard = ({ item }: { item: CareInvite }) => (
     <View style={styles.card}>
@@ -87,9 +83,7 @@ export default function CareInvitesScreen() {
     </View>
   );
 
-  /* =========================================
-   *              🎨 RENDER MAIN
-   * ========================================= */
+
 
   if (loading) {
     return (
@@ -113,9 +107,6 @@ export default function CareInvitesScreen() {
   );
 }
 
-/* =========================================
- *              🎨 STYLES
- * ========================================= */
 
 const styles = StyleSheet.create({
   container: {

@@ -1,7 +1,6 @@
-/* ================================
-   UserMenuButton.tsx - CORREGIDO
-   ✅ Usa offlineAuthService.signOut() para mantener el cache
-   ================================ */
+/* 
+   UserMenuButton.tsx 
+   */
 
 import React, { useState, useEffect } from "react";
 import {
@@ -17,58 +16,64 @@ import { MaterialIcons } from "@expo/vector-icons";
 import { COLORS, FONT_SIZES } from "../../types";
 import { useNavigation } from "@react-navigation/native";
 
-// ✅ CAMBIO: Importar offlineAuthService en lugar de auth directamente
 import { offlineAuthService } from "../services/offline/OfflineAuthService";
 
 export default function UserMenuButton() {
-  const navigation = useNavigation<any>();
-  const [open, setOpen] = useState(false);
+  const navigation = useNavigation<any>(); // Hook para poder navegar entre pantallas
+  const [open, setOpen] = useState(false); // Estado que controla si el menú está abierto o cerrado
 
   useEffect(() => {
+    // Listener del botón físico "Atrás" en Android
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (open) {
-        setOpen(false);
-        return true;
+        setOpen(false); // Si el menú está abierto, lo cierra
+        return true; // Consume el evento (no vuelve a la pantalla anterior)
       }
-      return false;
+      return false; // Permite el comportamiento normal del botón atrás
     });
-    return () => sub.remove();
-  }, [open]);
+    return () => sub.remove(); // Limpia el listener al desmontar o cambiar dependencias
+  }, [open]); // Se vuelve a registrar si cambia el estado del menú
 
   const go = (route: string) => {
-    setOpen(false);
-    navigation.navigate(route);
+    setOpen(false); // Cierra el menú antes de navegar
+    navigation.navigate(route); // Navega a la pantalla indicada
   };
 
   const handleLogout = async () => {
-    setOpen(false);
+    setOpen(false); // Cierra el menú
     try {
-      // ✅ CAMBIO CRÍTICO: Usar offlineAuthService.signOut()
-      // El parámetro false mantiene el cache para login offline futuro
       await offlineAuthService.signOut(false);
+      // Cierra sesión manteniendo el cache local (modo offline disponible)
 
-      navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Login" }], // Reinicia la navegación y manda a Login
+      });
     } catch (e: any) {
-      Alert.alert("Error al cerrar sesión", e?.message ?? "Intenta de nuevo.");
+      Alert.alert("Error al cerrar sesión", e?.message ?? "Intenta de nuevo."); // Muestra error si falla el logout
     }
   };
 
   // Función para logout completo (borra todo el cache)
   const handleLogoutComplete = async () => {
     Alert.alert(
-      "Cerrar sesión completa",
+      "Cerrar sesión completa", // Título del alert
       "¿Deseas borrar todos los datos guardados? No podrás usar la app sin internet hasta que vuelvas a iniciar sesión.",
       [
-        { text: "Cancelar", style: "cancel" },
+        { text: "Cancelar", style: "cancel" }, // Opción para cancelar
         {
           text: "Borrar y salir",
-          style: "destructive",
+          style: "destructive", // Botón de acción destructiva
           onPress: async () => {
-            setOpen(false);
+            setOpen(false); // Cierra el menú
             try {
-              // Cerrar sesión Y borrar cache
               await offlineAuthService.signOut(true);
-              navigation.reset({ index: 0, routes: [{ name: "Login" }] });
+              // Cierra sesión y borra todo el cache local
+
+              navigation.reset({
+                index: 0,
+                routes: [{ name: "Login" }], // Reinicia navegación a Login
+              });
             } catch (e: any) {
               Alert.alert("Error", e?.message ?? "Intenta de nuevo.");
             }
@@ -137,19 +142,6 @@ export default function UserMenuButton() {
 
             <View style={styles.divider} />
 
-            <TouchableOpacity
-              style={styles.item}
-              onPress={() => go("MyPatients")}
-            >
-              <MaterialIcons
-                name="supervisor-account"
-                size={18}
-                color={COLORS.text}
-                style={styles.icon}
-              />
-              <Text style={styles.txt}>Mis pacientes</Text>
-            </TouchableOpacity>
-
             <View style={styles.divider} />
 
             {/* CERRAR SESIÓN (mantiene cache) */}
@@ -164,20 +156,6 @@ export default function UserMenuButton() {
                 Cerrar sesión
               </Text>
             </TouchableOpacity>
-
-            {/* OPCIONAL: Logout completo que borra cache
-            <TouchableOpacity style={styles.item} onPress={handleLogoutComplete}>
-              <MaterialIcons
-                name="delete-forever"
-                size={18}
-                color="#b71c1c"
-                style={styles.icon}
-              />
-              <Text style={[styles.txt, { color: "#b71c1c", fontSize: 12 }]}>
-                Cerrar y borrar datos
-              </Text>
-            </TouchableOpacity>
-            */}
           </View>
         </>
       )}

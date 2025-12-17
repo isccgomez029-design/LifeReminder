@@ -4,7 +4,7 @@ import { View, Text, StyleSheet, ScrollView, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-// 🔐 Clave única para guardar los ajustes
+
 const SETTINGS_KEY = "@lifereminder/settings";
 
 type HourFormat = "12" | "24";
@@ -45,7 +45,7 @@ const SettingsScreen: React.FC = () => {
           setVibration(saved.vibration);
         }
       } catch (e) {
-        console.log("Error cargando ajustes:", e);
+
       }
     };
 
@@ -79,7 +79,7 @@ const SettingsScreen: React.FC = () => {
       }
 
     } catch (e) {
-      console.log("Error guardando ajustes:", e);
+
     }
   };
 

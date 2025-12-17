@@ -1,5 +1,5 @@
 // src/hooks/useCaregiverHooks.ts
-// 🎯 Hooks especializados para pantallas de cuidadores
+// Hooks especializados para pantallas de cuidadores
 
 import { useState, useEffect, useCallback } from "react";
 import { auth } from "../config/firebaseConfig";
@@ -121,7 +121,6 @@ export function useCareInvites(): UseCareInvitesResult {
 
   useEffect(() => {
     if (!userId) {
-      console.log("⚠️ No hay usuario autenticado (CareInvites)");
       setLoading(false);
       return;
     }
@@ -192,7 +191,6 @@ export function useMyPatients(): UseMyPatientsResult {
 
   useEffect(() => {
     if (!userId) {
-      console.log("⚠️ No hay usuario autenticado (MyPatients)");
       setLoading(false);
       return;
     }

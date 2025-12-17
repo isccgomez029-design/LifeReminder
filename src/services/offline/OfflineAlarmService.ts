@@ -1,23 +1,14 @@
 // src/services/offline/OfflineAlarmService.ts
-// 🔔 Sistema de alarmas 100% offline-first con persistencia total
-// ✅ FIX: usar DATE trigger (hora exacta) en vez de TIME_INTERVAL para evitar fallos/derivas offline
-// ✅ FIX: reconcile + persistencia más robusta (no se “cuelga” si Expo falla)
-// ✅ FIX: metadata huérfana se limpia y se guarda sin bloquear UI
+
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { offlineAuthService } from "./OfflineAuthService";
 
-// ============================================================
-//                         CONSTANTES
-// ============================================================
 
-const ALARMS_STORAGE_KEY = "@lifereminder/alarms"; // compat (no usado aquí)
+const ALARMS_STORAGE_KEY = "@lifereminder/alarms"; 
 const ALARM_METADATA_KEY = "@lifereminder/alarm_metadata";
 
-// ============================================================
-//                         TIPOS
-// ============================================================
 
 export interface AlarmMetadata {
   id: string; // notification ID de Expo
@@ -95,7 +86,7 @@ class OfflineAlarmService {
         // reconcile NO debe bloquear tu app si algo falla
         await this.reconcileWithExpoNotifications().catch(() => {});
         this.initialized = true;
-        console.log("✅ OfflineAlarmService inicializado");
+
       } catch (error) {
         console.error("❌ Error inicializando OfflineAlarmService:", error);
       } finally {
@@ -117,7 +108,7 @@ class OfflineAlarmService {
         if (alarm?.id) this.alarms.set(alarm.id, alarm);
       });
 
-      console.log(`📥 Cargadas ${this.alarms.size} alarmas del storage`);
+
     } catch (error) {
       console.error("❌ Error cargando alarmas:", error);
     }
@@ -127,8 +118,7 @@ class OfflineAlarmService {
     try {
       const data = Array.from(this.alarms.values());
       await AsyncStorage.setItem(ALARM_METADATA_KEY, JSON.stringify(data));
-      // log leve (no muy ruidoso)
-      // console.log(`💾 Guardadas ${data.length} alarmas en storage`);
+
     } catch (error) {
       console.error("❌ Error guardando alarmas:", error);
     }
@@ -152,7 +142,7 @@ class OfflineAlarmService {
 
       if (removedCount > 0) {
         await this.saveAlarmsToStorage();
-        console.log(`🧹 Eliminados ${removedCount} metadatos huérfanos`);
+
       }
     } catch (error) {
       console.error("⚠️ Error reconciliando notificaciones:", error);
@@ -161,7 +151,7 @@ class OfflineAlarmService {
   }
 
   // ============================================================
-  //  ✅ NUEVO: Trigger exacto por FECHA
+  //  Trigger exacto por FECHA
   // ============================================================
 
   private makeDateTrigger(date: Date): Notifications.DateTriggerInput {
@@ -171,10 +161,7 @@ class OfflineAlarmService {
     };
   }
 
-  /**
-   * Fallback por si algún dispositivo se pone difícil con DATE trigger.
-   * OJO: solo se usa si DATE falla.
-   */
+
   private makeTimeIntervalTrigger(
     target: Date
   ): Notifications.TimeIntervalTriggerInput {
@@ -308,10 +295,7 @@ class OfflineAlarmService {
       await this.saveAlarmsToStorage();
       await sleep(50);
 
-      console.log(
-        `✅ Alarma medicamento programada (${notificationId}) para:`,
-        triggerDate.toLocaleString()
-      );
+
 
       return { notificationId, metadata, success: true };
     } catch (error: any) {
@@ -411,10 +395,6 @@ class OfflineAlarmService {
       await this.saveAlarmsToStorage();
       await sleep(50);
 
-      console.log(
-        `✅ Alarma hábito programada (${notificationId}) para:`,
-        triggerDate.toLocaleString()
-      );
 
       return { notificationId, metadata, success: true };
     } catch (error: any) {
@@ -442,7 +422,7 @@ class OfflineAlarmService {
 
     this.alarms.delete(notificationId);
     await this.saveAlarmsToStorage().catch(() => {});
-    console.log(`🗑️ Alarma cancelada (local): ${notificationId}`);
+
     return true;
   }
 
@@ -466,7 +446,6 @@ class OfflineAlarmService {
       if (ok) count++;
     }
 
-    console.log(`🗑️ Canceladas ${count} alarmas del item ${itemId}`);
     return count;
   }
 
@@ -487,7 +466,6 @@ class OfflineAlarmService {
       if (ok) count++;
     }
 
-    console.log(`🗑️ Canceladas ${count} alarmas del usuario ${ownerUid}`);
     return count;
   }
 
@@ -502,7 +480,7 @@ class OfflineAlarmService {
 
     this.alarms.clear();
     await this.saveAlarmsToStorage().catch(() => {});
-    console.log("🗑️ Todas las alarmas canceladas (local)");
+
   }
 
   // ========================================
@@ -534,10 +512,7 @@ class OfflineAlarmService {
     return this.alarms.size;
   }
 
-  // ========================================
-  //        HELPERS
-  // ========================================
-
+  //        HELPERS //
   private async getPatientName(userId: string): Promise<string> {
     try {
       const cachedUser = await offlineAuthService.getCachedUser();
@@ -551,9 +526,9 @@ class OfflineAlarmService {
     }
   }
 
-  // ========================================
-  //        PROGRAMAR SIGUIENTE ALARMA DE MEDICAMENTO
-  // ========================================
+
+  // PROGRAMAR SIGUIENTE ALARMA DE MEDICAMENTO //
+
 
   async scheduleNextMedicationAlarm(medication: {
     nombre: string;
@@ -567,7 +542,7 @@ class OfflineAlarmService {
   }): Promise<AlarmScheduleResult> {
     try {
       if (!medication.frecuencia) {
-        console.log("⚠️ Sin frecuencia, no se programa siguiente alarma");
+
         return {
           notificationId: null,
           metadata: null,
@@ -578,10 +553,7 @@ class OfflineAlarmService {
 
       const match = medication.frecuencia.match(/^(\d{1,2}):(\d{2})$/);
       if (!match) {
-        console.log(
-          "⚠️ Formato de frecuencia inválido:",
-          medication.frecuencia
-        );
+
         return {
           notificationId: null,
           metadata: null,
@@ -620,9 +592,7 @@ class OfflineAlarmService {
     }
   }
 
-  // ========================================
-  //        LIMPIEZA DE ALARMAS VENCIDAS
-  // ========================================
+  //        LIMPIEZA DE ALARMAS VENCIDAS //
 
   async cleanupExpiredAlarms(): Promise<number> {
     await this.initialize();
@@ -649,33 +619,12 @@ class OfflineAlarmService {
 
     if (count > 0) {
       await this.saveAlarmsToStorage().catch(() => {});
-      console.log(`🧹 Limpiadas ${count} alarmas vencidas`);
+
     }
 
     return count;
   }
 
-  // ========================================
-  //        DEBUG
-  // ========================================
-
-  async debugPrintAllAlarms(): Promise<void> {
-    await this.initialize();
-    console.log("========================================");
-    console.log("DEBUG: TODAS LAS ALARMAS");
-    console.log("========================================");
-    console.log(`Total: ${this.alarms.size}`);
-    for (const [id, metadata] of this.alarms.entries()) {
-      console.log(`ID: ${id}`);
-      console.log(`  Tipo: ${metadata.type}`);
-      console.log(`  Item: ${metadata.itemName} (${metadata.itemId})`);
-      console.log(`  Usuario: ${metadata.ownerUid}`);
-      console.log(`  Trigger: ${metadata.triggerDate}`);
-      console.log(`  Snooze: ${metadata.snoozeCount}`);
-      console.log("---");
-    }
-    console.log("========================================");
-  }
 
   async reprogramMissingAlarms(
     medications: Array<{
@@ -701,7 +650,7 @@ class OfflineAlarmService {
     for (const med of medications) {
       if (med.nextDueAt && med.nextDueAt > now && !med.currentAlarmId) {
         try {
-          console.log(`🔔 Reprogramando alarma para ${med.nombre}...`);
+
 
           const result = await this.scheduleMedicationAlarm(med.nextDueAt, {
             nombre: med.nombre,
@@ -717,7 +666,7 @@ class OfflineAlarmService {
 
           if (result.success) {
             reprogrammed++;
-            console.log(`✅ Alarma reprogramada: ${result.notificationId}`);
+
           } else {
             errors++;
           }
@@ -727,17 +676,11 @@ class OfflineAlarmService {
         }
       }
     }
-
-    console.log(
-      `🔔 Reprogramación completa: ${reprogrammed} ok, ${errors} errores`
-    );
     return { reprogrammed, errors };
   }
 }
 
-// ============================================================
-//                    INSTANCIA SINGLETON
-// ============================================================
+
 
 export const offlineAlarmService = new OfflineAlarmService();
 export default offlineAlarmService;

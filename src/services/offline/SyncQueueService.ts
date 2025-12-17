@@ -14,10 +14,6 @@ import {
   Timestamp,
 } from "firebase/firestore";
 
-// ============================================================
-//                         TIPOS
-// ============================================================
-
 const QUEUE_KEY = "@lifereminder/sync_queue";
 const STORAGE_PREFIX = "@lifereminder/data";
 
@@ -64,10 +60,8 @@ export interface SyncResult {
   error?: string;
 }
 
-// ============================================================
-//                    ESTADO INTERNO
-// ============================================================
 
+//                    ESTADO INTERNO
 let isOnline = true;
 let isProcessing = false;
 let lastSyncTime: Date | null = null;
@@ -82,27 +76,14 @@ const AUTO_SYNC_COLLECTIONS = [
   "history",
 ];
 
-// ============================================================
-//                    UTILIDADES
-// ============================================================
 
-function log(message: string, data?: any) {
-  console.log(`[SyncQueue] ${message}`, data ?? "");
-}
+//  UTILIDADES
+
 
 function getCacheKey(collectionName: string, userId: string): string {
   return `${STORAGE_PREFIX}/${userId}/${collectionName}`;
 }
 
-/**
- * ✅ FIX DE RAÍZ:
- * Normaliza fechas para AsyncStorage (JSON).
- * Convierte:
- * - Firestore Timestamp -> ISO string
- * - {seconds, nanoseconds} -> ISO string
- * - Date -> ISO string
- * Y recorre objetos/arreglos recursivamente.
- */
 function normalizeForStorage(value: any): any {
   if (value === null || value === undefined) return value;
 
@@ -116,7 +97,7 @@ function normalizeForStorage(value: any): any {
     }
   }
 
-  // Timestamp ya serializado {seconds, nanoseconds}
+
   if (typeof value?.seconds === "number") {
     const d = new Date(value.seconds * 1000);
     return isNaN(d.getTime()) ? null : d.toISOString();
@@ -144,13 +125,12 @@ function normalizeForStorage(value: any): any {
   return value;
 }
 
-// ============================================================
+
 //                    INICIALIZACIÓN
-// ============================================================
 
 async function initialize(): Promise<void> {
   if (isInitialized) {
-    log("⚠️ Ya inicializado");
+
     return;
   }
 
@@ -163,10 +143,10 @@ async function initialize(): Promise<void> {
     isOnline =
       state.isConnected === true && state.isInternetReachable !== false;
 
-    log(`📶 Red: ${isOnline ? "Online" : "Offline"}`);
+
 
     if (isOnline && wasOffline) {
-      log("🔄 Reconectado, procesando cola...");
+
       setTimeout(() => processQueue(), 1500);
     }
   });
@@ -174,7 +154,7 @@ async function initialize(): Promise<void> {
   const state = await NetInfo.fetch();
   isOnline = state.isConnected === true && state.isInternetReachable !== false;
 
-  log(`📶 Estado inicial: ${isOnline ? "Online" : "Offline"}`);
+
 
   const queue = await getQueue();
   const pendingCount = queue.filter(
@@ -182,14 +162,14 @@ async function initialize(): Promise<void> {
   ).length;
 
   if (pendingCount > 0) {
-    log(`📋 ${pendingCount} operaciones pendientes`);
+
     if (isOnline) {
       setTimeout(() => processQueue(), 2000);
     }
   }
 
   isInitialized = true;
-  log("✅ Inicializado");
+
 }
 
 function destroy(): void {
@@ -199,13 +179,11 @@ function destroy(): void {
   }
   listeners = [];
   isInitialized = false;
-  log("🛑 Destruido");
+
 }
 
-// ============================================================
-//                    QUEUE LISTENERS
-// ============================================================
 
+//                    QUEUE LISTENERS
 function addListener(callback: (queue: QueueItem[]) => void): () => void {
   listeners.push(callback);
   return () => {
@@ -218,16 +196,14 @@ async function notifyListeners(): Promise<void> {
   listeners.forEach((listener) => listener(queue));
 }
 
-// ============================================================
-//                    QUEUE MANAGEMENT
-// ============================================================
 
+//                    QUEUE MANAGEMENT
 async function getQueue(): Promise<QueueItem[]> {
   try {
     const data = await AsyncStorage.getItem(QUEUE_KEY);
     return data ? JSON.parse(data) : [];
   } catch (error) {
-    log("❌ Error leyendo cola:", error);
+
     return [];
   }
 }
@@ -237,7 +213,7 @@ async function saveQueue(queue: QueueItem[]): Promise<void> {
     await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
     await notifyListeners();
   } catch (error) {
-    log("❌ Error guardando cola:", error);
+
   }
 }
 
@@ -277,7 +253,7 @@ async function enqueue(
     await removeItemFromCache(collectionName, userId, documentId);
   }
 
-  log(`📝 Encolado: ${type} ${collectionName}/${documentId}`);
+
 
   if (isOnline && !isProcessing) {
     setTimeout(() => processQueue(), 500);
@@ -335,7 +311,7 @@ function prepareDataForFirestore(
 
 async function processQueue(): Promise<{ success: number; failed: number }> {
   if (isProcessing) {
-    log("⏳ Ya procesando");
+
     return { success: 0, failed: 0 };
   }
 
@@ -344,7 +320,7 @@ async function processQueue(): Promise<{ success: number; failed: number }> {
     netState.isConnected === true && netState.isInternetReachable !== false;
 
   if (!isOnline) {
-    log("📴 Sin conexión");
+
     return { success: 0, failed: 0 };
   }
 
@@ -361,8 +337,6 @@ async function processQueue(): Promise<{ success: number; failed: number }> {
     await notifyListeners();
     return { success: 0, failed: 0 };
   }
-
-  log(`🔄 Procesando ${pendingItems.length} operaciones...`);
 
   let successCount = 0;
   let failedCount = 0;
@@ -382,7 +356,7 @@ async function processQueue(): Promise<{ success: number; failed: number }> {
       if (item.type === "CREATE") {
         const preparedData = prepareDataForFirestore(item.payload);
         await setDoc(docRef, preparedData);
-        log(`✅ CREATE: ${item.documentId}`);
+
         successCount++;
       } else if (item.type === "UPDATE") {
         const preparedData = prepareDataForFirestore(item.payload);
@@ -390,19 +364,17 @@ async function processQueue(): Promise<{ success: number; failed: number }> {
 
         if (docSnap.exists()) {
           await updateDoc(docRef, preparedData);
-          log(`✅ UPDATE: ${item.documentId}`);
+
         } else {
           await setDoc(docRef, preparedData);
-          log(`✅ UPDATE→CREATE: ${item.documentId}`);
+
         }
         successCount++;
       } else if (item.type === "DELETE") {
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           await deleteDoc(docRef);
-          log(`✅ DELETE: ${item.documentId}`);
         } else {
-          log(`⚠️ DELETE omitido: ${item.documentId}`);
         }
         successCount++;
       }
@@ -417,7 +389,6 @@ async function processQueue(): Promise<{ success: number; failed: number }> {
         currentQueue[itemIndex].error = error?.message || "Error";
 
         if (currentQueue[itemIndex].retryCount >= 5) {
-          log(`❌ Eliminando fallida: ${item.documentId}`);
           currentQueue = currentQueue.filter((q) => q.id !== item.id);
         }
 
@@ -425,7 +396,7 @@ async function processQueue(): Promise<{ success: number; failed: number }> {
       }
 
       failedCount++;
-      log(`❌ Error ${item.type} ${item.documentId}:`, error?.message);
+
     }
   }
 
@@ -433,7 +404,7 @@ async function processQueue(): Promise<{ success: number; failed: number }> {
   isProcessing = false;
   await notifyListeners();
 
-  log(`✅ Resultado: ${successCount} ok, ${failedCount} error`);
+
   return { success: successCount, failed: failedCount };
 }
 
@@ -455,17 +426,16 @@ async function retryFailed(): Promise<void> {
 async function clearQueue(): Promise<void> {
   await AsyncStorage.removeItem(QUEUE_KEY);
   await notifyListeners();
-  log("🗑️ Cola limpiada");
+
 }
 
 async function forceSync(): Promise<{ success: number; failed: number }> {
-  log("🔄 Forzando sincronización...");
+
   return processQueue();
 }
 
-// ============================================================
-//              CACHE MANAGEMENT (CORREGIDO + FIX FECHAS)
-// ============================================================
+
+//              CACHE MANAGEMENT 
 
 async function saveToCache(
   collectionName: string,
@@ -538,7 +508,7 @@ async function saveToCache(
         }
       }
 
-      // ✅ Normalizar fechas/objetos antes de guardar
+
       finalData.push(normalizeForStorage(mergedItem));
       processedIds.add(item.id);
     }
@@ -571,12 +541,8 @@ async function saveToCache(
       lastSyncedAt: Date.now(),
     };
     await AsyncStorage.setItem(key, JSON.stringify(cached));
-
-    log(
-      `💾 Cache: ${collectionName} (${finalData.length} items, alarmas preservadas)`
-    );
   } catch (error) {
-    log(`❌ Error guardando cache:`, error);
+
   }
 }
 
@@ -595,7 +561,7 @@ async function getFromCache<T = Record<string, any>>(
 
     return null;
   } catch (error) {
-    log(`❌ Error leyendo cache:`, error);
+
     return null;
   }
 }
@@ -607,7 +573,7 @@ async function addItemToCache(
 ): Promise<void> {
   try {
     if (!item.id) {
-      log(`⚠️ Item sin id`);
+
       return;
     }
 
@@ -634,9 +600,8 @@ async function addItemToCache(
     };
     await AsyncStorage.setItem(key, JSON.stringify(cacheData));
 
-    log(`➕ Agregado: ${collectionName}/${item.id}`);
   } catch (error) {
-    log(`❌ Error agregando:`, error);
+
   }
 }
 
@@ -659,7 +624,7 @@ async function updateItemInCache(
         lastSyncedAt: Date.now(),
       };
       await AsyncStorage.setItem(key, JSON.stringify(cacheData));
-      log(`✏️ Cache creado con: ${collectionName}/${docId}`);
+
       return;
     }
 
@@ -673,13 +638,13 @@ async function updateItemInCache(
         ...updates,
       };
       updatedData[itemIndex] = normalizeForStorage(updatedData[itemIndex]);
-      log(`✏️ Actualizado existente: ${collectionName}/${docId}`);
+
     } else {
       updatedData = [
         ...cached.data,
         normalizeForStorage({ id: docId, ...updates }),
       ];
-      log(`✏️ Agregado nuevo: ${collectionName}/${docId}`);
+
     }
 
     const key = getCacheKey(collectionName, userId);
@@ -690,7 +655,7 @@ async function updateItemInCache(
     };
     await AsyncStorage.setItem(key, JSON.stringify(cacheData));
   } catch (error) {
-    log(`❌ Error actualizando cache:`, error);
+
   }
 }
 
@@ -713,9 +678,9 @@ async function removeItemFromCache(
     };
     await AsyncStorage.setItem(key, JSON.stringify(cacheData));
 
-    log(`🗑️ Eliminado: ${collectionName}/${docId}`);
+
   } catch (error) {
-    log(`❌ Error eliminando:`, error);
+
   }
 }
 
@@ -730,7 +695,7 @@ async function getItemFromCache(
 
     return (cached.data as any).find((item: any) => item.id === docId) || null;
   } catch (error) {
-    log(`❌ Error obteniendo item:`, error);
+
     return null;
   }
 }
@@ -742,9 +707,9 @@ async function clearCache(
   try {
     const key = getCacheKey(collectionName, userId);
     await AsyncStorage.removeItem(key);
-    log(`🗑️ Cache limpiado: ${collectionName}`);
+
   } catch (error) {
-    log(`❌ Error:`, error);
+
   }
 }
 
@@ -757,10 +722,10 @@ async function clearAllUserCache(userId: string): Promise<void> {
 
     if (userCacheKeys.length > 0) {
       await AsyncStorage.multiRemove(userCacheKeys);
-      log(`🗑️ Cache del usuario limpiado (${userCacheKeys.length} keys)`);
+
     }
   } catch (error) {
-    log(`❌ Error:`, error);
+
   }
 }
 
@@ -777,7 +742,7 @@ async function hasCachedData(userId: string): Promise<boolean> {
 
 async function debugCache(userId: string): Promise<void> {
   try {
-    log(`🔍 Debug Cache para ${userId}:`);
+
 
     for (const collectionName of AUTO_SYNC_COLLECTIONS) {
       const cached = await getFromCache(collectionName, userId);
@@ -786,25 +751,18 @@ async function debugCache(userId: string): Promise<void> {
           (item: any) => item.isArchived === true || !!item.archivedAt
         ).length;
         const activeCount = cached.data.length - archivedCount;
-        log(
-          `   ${collectionName}: ${cached.data.length} items (${activeCount} activos, ${archivedCount} archivados)`
-        );
-      } else {
-        log(`   ${collectionName}: vacío`);
-      }
+      } 
     }
 
     const queue = await getQueue();
     const userQueue = queue.filter((op) => op.userId === userId);
-    log(`   Cola: ${userQueue.length} operaciones`);
   } catch (error) {
-    log(`❌ Error debug:`, error);
+
   }
 }
 
-// ============================================================
-// ✅ NUEVO: MIGRAR NAMESPACE (tempUid -> realUid)
-// ============================================================
+
+//  MIGRAR NAMESPACE (tempUid -> realUid)
 
 async function migrateUserNamespace(
   oldUid: string,
@@ -813,7 +771,6 @@ async function migrateUserNamespace(
   if (!oldUid || !newUid || oldUid === newUid) return;
 
   try {
-    log(`🧬 Migrando namespace: ${oldUid} -> ${newUid}`);
 
     const allKeys = await AsyncStorage.getAllKeys();
     const oldPrefix = `${STORAGE_PREFIX}/${oldUid}/`;
@@ -831,7 +788,7 @@ async function migrateUserNamespace(
       await AsyncStorage.removeItem(key);
     }
 
-    log(`✅ Cache migrado: ${oldKeys.length} keys`);
+
 
     const queue = await getQueue();
     const updated = queue.map((item) => {
@@ -842,15 +799,14 @@ async function migrateUserNamespace(
     });
 
     await saveQueue(updated);
-    log("✅ Cola migrada");
+
   } catch (err: any) {
-    log("❌ migrateUserNamespace error:", err?.message);
+
   }
 }
 
-// ============================================================
+
 //    SINCRONIZACIÓN
-// ============================================================
 
 async function syncCollection(
   collectionName: string,
@@ -861,13 +817,13 @@ async function syncCollection(
     netState.isConnected === true && netState.isInternetReachable !== false;
 
   if (!isOnline) {
-    log(`📴 Sin conexión, retornando cache para ${collectionName}`);
+
     const cached = await getFromCache(collectionName, userId);
     return cached?.data || [];
   }
 
   try {
-    log(`📥 Sincronizando: ${collectionName}`);
+
 
     const collRef = collection(db, "users", userId, collectionName);
     const snapshot = await getDocs(collRef);
@@ -879,30 +835,25 @@ async function syncCollection(
 
     await saveToCache(collectionName, userId, data);
 
-    log(`✅ ${collectionName}: ${data.length} docs`);
 
     const cached = await getFromCache(collectionName, userId);
     return cached?.data || data;
   } catch (error) {
-    log(`❌ Error sync ${collectionName}:`, error);
+
     const cached = await getFromCache(collectionName, userId);
     return cached?.data || [];
   }
 }
 
 async function syncAllCollections(userId: string): Promise<void> {
-  log("🔄 Sincronizando todas las colecciones...");
 
   for (const collectionName of AUTO_SYNC_COLLECTIONS) {
     await syncCollection(collectionName, userId);
   }
-
-  log("✅ Sincronización completa");
 }
 
-// ============================================================
+
 //    ALIASES PARA COMPATIBILIDAD
-// ============================================================
 
 const saveLocalData = async (
   collectionName: string,
@@ -941,9 +892,8 @@ const updateCacheItem = updateItemInCache;
 const deleteCacheItem = removeItemFromCache;
 const addToCacheItem = addItemToCache;
 
-// ============================================================
+
 //                    UTILIDADES
-// ============================================================
 
 async function hasPendingOperations(
   collectionName: string,
@@ -1046,9 +996,8 @@ async function checkConnection(): Promise<boolean> {
   return isOnline;
 }
 
-// ============================================================
+
 //                    EXPORT
-// ============================================================
 
 export const syncQueueService = {
   initialize,
@@ -1095,8 +1044,6 @@ export const syncQueueService = {
   getExcludedIds,
   getIsOnline,
   checkConnection,
-
-  // ✅ NUEVO
   migrateUserNamespace,
 };
 

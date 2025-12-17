@@ -1,5 +1,4 @@
 // src/services/alarmHelpers.ts
-// ✅ ACTUALIZADO: 100% offline-first usando OfflineAlarmService
 
 import {
   offlineAlarmService,
@@ -7,7 +6,7 @@ import {
 } from "./offline/OfflineAlarmService";
 
 /* -----------------------------------------------------------
-   💊 PROGRAMAR ALARMA DE MEDICAMENTO
+   PROGRAMAR ALARMA DE MEDICAMENTO
 ----------------------------------------------------------- */
 export async function scheduleMedicationAlarm(
   triggerDate: Date,
@@ -32,7 +31,7 @@ export async function scheduleMedicationAlarm(
 }
 
 /* -----------------------------------------------------------
-   🧘 PROGRAMAR ALARMA DE HÁBITO
+   PROGRAMAR ALARMA DE HÁBITO
 ----------------------------------------------------------- */
 export async function scheduleHabitAlarm(
   triggerDate: Date,
@@ -54,7 +53,7 @@ export async function scheduleHabitAlarm(
 }
 
 /* -----------------------------------------------------------
-   🗓️ PROGRAMAR VARIAS ALARMAS DE HÁBITO (RECURRENTES)
+   PROGRAMAR VARIAS ALARMAS DE HÁBITO (RECURRENTES)
 ----------------------------------------------------------- */
 export async function scheduleRecurringHabitAlarms(habit: {
   id?: string;
@@ -88,11 +87,6 @@ export async function scheduleRecurringHabitAlarms(habit: {
         if (id) scheduledIds.push(id);
       }
     }
-
-    console.log(
-      `✅ Programadas ${scheduledIds.length} alarmas recurrentes para "${habit.name}"`
-    );
-
     return scheduledIds;
   } catch (error) {
     console.error("❌ Error programando alarmas recurrentes:", error);
@@ -101,7 +95,7 @@ export async function scheduleRecurringHabitAlarms(habit: {
 }
 
 /* -----------------------------------------------------------
-   🧹 CANCELAR ALARMAS
+    CANCELAR ALARMAS
 ----------------------------------------------------------- */
 export async function cancelAlarm(notificationId: string): Promise<void> {
   await offlineAlarmService.cancelAlarm(notificationId);
@@ -123,7 +117,7 @@ export async function getAllScheduledAlarms() {
 }
 
 /* -----------------------------------------------------------
-   ⏰ Calcular próxima ocurrencia (para alarmas recurrentes)
+   Calcular próxima ocurrencia (para alarmas recurrentes)
 ----------------------------------------------------------- */
 function getNextOccurrence(
   targetDayOfWeek: number,
@@ -154,7 +148,7 @@ function getNextOccurrence(
 }
 
 /* -----------------------------------------------------------
-   🆕 UTILIDAD: Reprogramar alarma de medicamento según frecuencia
+   UTILIDAD: Reprogramar alarma de medicamento según frecuencia
 ----------------------------------------------------------- */
 export async function scheduleNextMedicationAlarm(medication: {
   nombre: string;
@@ -190,9 +184,4 @@ export async function cleanupExpiredAlarms(): Promise<number> {
   return await offlineAlarmService.cleanupExpiredAlarms();
 }
 
-/**
- * Debug: imprime todas las alarmas programadas
- */
-export async function debugPrintAllAlarms(): Promise<void> {
-  await offlineAlarmService.debugPrintAllAlarms();
-}
+

@@ -1,17 +1,20 @@
 // src/components/OfflineBanner.tsx
-// 📡 Banner que muestra el estado de conexión y cambios pendientes
 
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { MaterialIcons } from "@expo/vector-icons";
 
 interface OfflineBannerProps {
-  pendingChanges?: number;
+  // Define las props que recibe el componente
+  pendingChanges?: number; // Número de cambios pendientes de sincronizar (opcional)
 }
 
 export function OfflineBanner({ pendingChanges = 0 }: OfflineBannerProps) {
+  // Componente funcional que recibe pendingChanges
+  // Si no se pasa la prop, por defecto se usa 0
+
   if (pendingChanges === 0) {
-    return null; // No mostrar nada si no hay cambios pendientes
+    return null; // No renderiza nada cuando no hay cambios pendientes
   }
 
   return (

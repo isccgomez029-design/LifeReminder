@@ -1,5 +1,5 @@
 // App.tsx
-// ✅ SIMPLIFICADO: Solo usa SyncQueueService (sin OfflineDataManager)
+
 
 import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
@@ -42,31 +42,23 @@ export default function App() {
 
     const initializeApp = async () => {
       try {
-        console.log("🚀 Inicializando LifeReminder...");
 
         await configureNotificationPermissions();
 
         const cachedUser = await offlineAuthService.initialize();
-        console.log(
-          "✅ Auth inicializado:",
-          cachedUser ? cachedUser.email : "Sin sesión"
-        );
 
         await syncQueueService.initialize();
-        console.log("✅ Sync Queue inicializado");
 
-        // ⭐ INSTRUCCIÓN 2: Inicializar Sistema de Alarmas
+        // INSTRUCCIÓN 2: Inicializar Sistema de Alarmas
         await offlineAlarmService.initialize();
-        console.log("✅ Sistema de alarmas inicializado");
 
         await performAlarmMaintenance();
-        console.log("✅ Mantenimiento de alarmas completado");
 
         if (cachedUser) {
           await syncQueueService.debugCache(cachedUser.uid);
         }
 
-        // ⭐ INSTRUCCIÓN 4: LIMPIAR ALARMAS HUÉRFANAS
+        // INSTRUCCIÓN 4: LIMPIAR ALARMAS HUÉRFANAS
         const userId =
           auth.currentUser?.uid || offlineAuthService.getCurrentUid();
 
@@ -75,10 +67,6 @@ export default function App() {
         }
 
         const netState = await NetInfo.fetch();
-        console.log(
-          "📡 Estado de conexión:",
-          netState.isConnected ? "Online" : "Offline"
-        );
 
         if (isMounted) setIsInitializing(false);
       } catch (error: any) {
@@ -92,7 +80,7 @@ export default function App() {
 
     initializeApp();
 
-    // ⭐ INSTRUCCIÓN 3: Listener modificado (response / background)
+    //  INSTRUCCIÓN 3: Listener modificado (response / background)
     const responseListener =
       Notifications.addNotificationResponseReceivedListener(
         async (response) => {
@@ -103,14 +91,12 @@ export default function App() {
 
             if (shouldShow) {
               (navigationRef.current as any)?.navigate("Alarm", data.params);
-            } else {
-              console.log(`🔕 Alarma ignorada: ${reason}`);
-            }
+            } 
           }
         }
       );
 
-    // ⭐ Listener foreground
+    //  Listener foreground
     const notificationListener = Notifications.addNotificationReceivedListener(
       async (notification) => {
         const data = notification.request.content.data;
@@ -120,9 +106,7 @@ export default function App() {
 
           if (shouldShow) {
             (navigationRef.current as any)?.navigate("Alarm", data.params);
-          } else {
-            console.log(`🔕 Alarma ignorada (foreground): ${reason}`);
-          }
+          } 
         }
       }
     );
@@ -159,7 +143,7 @@ export default function App() {
     );
   }
 
-  // ⭐ INSTRUCCIÓN 4: Agregar AlarmInitializer en el Return
+  // INSTRUCCIÓN 4: Agregar AlarmInitializer en el Return
   return (
     <OfflineProvider>
       <SafeAreaProvider>

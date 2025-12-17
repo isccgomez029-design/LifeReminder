@@ -1,5 +1,5 @@
 // src/screens/care/CareNetworkScreen.tsx
-// ✅ CORREGIDO: Soporte offline completo
+
 
 import React, { useEffect, useState } from "react";
 import {
@@ -32,10 +32,9 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 
-// ✅ NUEVO: Soporte offline
+
 import { offlineAuthService } from "../../services/offline/OfflineAuthService";
 import { syncQueueService } from "../../services/offline/SyncQueueService";
-import { OfflineBanner } from "../../components/OfflineBanner";
 import NetInfo from "@react-native-community/netinfo";
 
 type Nav = StackNavigationProp<RootStackParamList, "CareNetwork">;
@@ -97,7 +96,7 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // ✅ NUEVO: Estados offline
+  // Estados offline
   const [isOnline, setIsOnline] = useState(true);
   const [pendingChanges, setPendingChanges] = useState(0);
   const [isFromCache, setIsFromCache] = useState(false);
@@ -112,7 +111,7 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
 
   const [saving, setSaving] = useState(false);
 
-  // ✅ CORREGIDO: Obtener UID con soporte offline
+  //Obtener UID con soporte offline
   const userId = auth.currentUser?.uid || offlineAuthService.getCurrentUid();
 
   /** ================ Monitor de conectividad ================ */
@@ -145,7 +144,7 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
         );
 
         if (cached?.data && cached.data.length > 0) {
-          console.log("📦 CareNetwork desde cache:", cached.data.length);
+
           const list = cached.data
             .filter((item: any) => !item.deleted)
             .map((data: any) => ({
@@ -174,7 +173,7 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
           setLoading(false);
         }
       } catch (error) {
-        console.log("Error cache careNetwork:", error);
+
       }
     };
 
@@ -218,7 +217,7 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
           return (a.name || "").localeCompare(b.name || "");
         });
 
-        // ✅ Guardar en cache
+        // Guardar en cache
         await syncQueueService.saveToCache("careNetwork", userId, list);
 
         setCaregivers(list);
@@ -226,7 +225,7 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
         setLoading(false);
       },
       (err) => {
-        console.log("Error cargando red de apoyo:", err);
+
         // Si hay error de red, mantener datos del cache
         if (!isOnline) {
           setLoading(false);
@@ -288,7 +287,7 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
           createdAt: serverTimestamp(),
         });
       } else {
-        // ✅ Offline: encolar operación
+        //  Offline: encolar operación
         const tempId = `temp_${Date.now()}_${Math.random()
           .toString(36)
           .substr(2, 9)}`;
@@ -327,7 +326,7 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
           : "Se guardará cuando haya conexión."
       );
     } catch (e: any) {
-      console.log("Error agregando cuidador:", e);
+
       Alert.alert(
         "Error",
         e?.message ?? "No se pudo agregar el contacto. Intenta nuevamente."
@@ -355,7 +354,7 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
           updatedAt: serverTimestamp(),
         });
       } else {
-        // ✅ Offline: encolar
+        //  Offline: encolar
         await syncQueueService.enqueue("UPDATE", "careNetwork", id, userId, {
           accessMode: mode,
           updatedAt: new Date().toISOString(),
@@ -368,7 +367,7 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
         setPendingChanges(await syncQueueService.getPendingCount());
       }
     } catch (e: any) {
-      console.log("Error actualizando accessMode:", e);
+
       // Revertir
       setCaregivers((prev) =>
         prev.map((c) => (c.id === id ? { ...c, accessMode: cg.accessMode } : c))
@@ -407,7 +406,7 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
                   deletedAt: serverTimestamp(),
                 });
               } else {
-                // ✅ Offline: encolar
+                //  Offline: encolar
                 await syncQueueService.enqueue(
                   "UPDATE",
                   "careNetwork",
@@ -429,7 +428,6 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
                 setPendingChanges(await syncQueueService.getPendingCount());
               }
             } catch (e: any) {
-              console.log("Error eliminando cuidador:", e);
               // Revertir
               setCaregivers((prev) => [...prev, cg]);
               Alert.alert(

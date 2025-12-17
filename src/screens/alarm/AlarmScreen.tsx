@@ -1,595 +1,82 @@
 // src/screens/alarm/AlarmScreen.tsx
-// ✅ CORREGIDO: Espera persistencia antes de cerrar
-// ✅ NUEVO: Al posponer MEDS, actualiza nextDueAt/proximaToma sumando minutos pospuestos
-// ✅ EXTRA: Evita que se “cuelgue” offline (logs a cuidadores NO bloquean)
 
-import React, { useEffect, useRef, useState } from "react";
+
+import React from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Image,
-  Vibration,
   StatusBar,
   Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
-import { Audio } from "expo-av";
-import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
-import { StackNavigationProp } from "@react-navigation/stack";
+import { useRoute, RouteProp } from "@react-navigation/native";
 import { RootStackParamList } from "../../navigation/StackNavigator";
 
 import { auth } from "../../config/firebaseConfig";
 import { offlineAuthService } from "../../services/offline/OfflineAuthService";
-import { syncQueueService } from "../../services/offline/SyncQueueService";
-import {
-  notifyCaregiversAboutNoncompliance,
-  notifyCaregiversAboutDismissal,
-  logSnoozeEvent,
-  logComplianceSuccess,
-  logDismissalEvent,
-} from "../../services/caregiverNotifications";
-import offlineAlarmService from "../../services/offline/OfflineAlarmService";
-
-const freqToMs = (freq?: string): number => {
-  if (!freq) return 0;
-  const m = freq.match(/^(\d{1,2}):(\d{2})$/);
-  if (!m) return 0;
-  return (parseInt(m[1], 10) * 60 + parseInt(m[2], 10)) * 60000;
-};
+import { useAlarmScreen } from "../../hooks/useAlarmScreen";
+import { AlarmParams } from "../../services/alarmService";
 
 type AlarmRoute = RouteProp<RootStackParamList, "Alarm">;
-type Nav = StackNavigationProp<RootStackParamList, "Alarm">;
-
-const VIBRATION_PATTERN = [0, 400, 200, 400, 200, 400];
-const SNOOZE_LIMIT = 3;
-
-// ✅ Helper para esperar persistencia (AsyncStorage)
-async function waitForPersistence(retries = 5, delayMs = 200): Promise<void> {
-  for (let i = 0; i < retries; i++) {
-    await new Promise((resolve) => setTimeout(resolve, delayMs));
-  }
-}
-
-// ✅ Date safe
-const toDateSafe = (v: any): Date | null => {
-  if (!v) return null;
-
-  if (typeof v === "string" || typeof v === "number") {
-    const d = new Date(v);
-    return isNaN(d.getTime()) ? null : d;
-  }
-
-  if (typeof v?.toDate === "function") {
-    const d = v.toDate();
-    return d instanceof Date && !isNaN(d.getTime()) ? d : null;
-  }
-
-  if (typeof v?.seconds === "number") {
-    const d = new Date(v.seconds * 1000);
-    return isNaN(d.getTime()) ? null : d;
-  }
-
-  return null;
-};
-
-// ✅ helper: log no bloqueante (evita cuelgues offline)
-const fireAndForget = (p: Promise<any>) => {
-  p.catch(() => {});
-};
 
 export default function AlarmScreen() {
   const route = useRoute<AlarmRoute>();
-  const navigation = useNavigation<Nav>();
-
-  const {
-    type,
-    title,
-    message,
-    medId,
-    ownerUid: paramOwnerUid,
-    imageUri,
-    doseLabel,
-    frecuencia,
-    cantidadActual,
-    cantidadPorToma,
-    habitIcon,
-    habitLib,
-    habitId,
-    snoozeCount: initialSnoozeCount,
-    patientName,
-  } = (route.params as any) || {};
+  const p = (route.params as any) || {};
 
   const ownerUid =
-    paramOwnerUid ||
-    auth.currentUser?.uid ||
-    offlineAuthService.getCurrentUid();
+    p.ownerUid || auth.currentUser?.uid || offlineAuthService.getCurrentUid();
 
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const params: AlarmParams = {
+    type: p.type,
+    title: p.title,
+    message: p.message,
 
-  const [snoozeCount, setSnoozeCount] = useState<number>(
-    initialSnoozeCount || 0
-  );
+    ownerUid,
+    patientName: p.patientName,
 
-  const isProcessingRef = useRef(false);
+    medId: p.medId,
+    imageUri: p.imageUri,
+    doseLabel: p.doseLabel,
+    frecuencia: p.frecuencia,
+    cantidadActual: p.cantidadActual,
+    cantidadPorToma: p.cantidadPorToma,
 
-  // ===================== Sound =====================
-  useEffect(() => {
-    let isMounted = true;
-    let loadedSound: Audio.Sound | null = null;
+    habitId: p.habitId,
+    habitIcon: p.habitIcon,
+    habitLib: p.habitLib,
 
-    async function loadSound() {
-      try {
-        const { sound: s } = await Audio.Sound.createAsync(
-          require("../../../assets/alarm_sound.mp3"),
-          { isLooping: true, volume: 1 }
-        );
-
-        if (isMounted) {
-          loadedSound = s;
-          setSound(s);
-          await s.playAsync();
-        } else {
-          await s.unloadAsync();
-        }
-      } catch {
-        // no-op
-      }
-    }
-
-    loadSound();
-
-    return () => {
-      isMounted = false;
-      if (loadedSound) {
-        loadedSound.stopAsync().catch(() => {});
-        loadedSound.unloadAsync().catch(() => {});
-      }
-    };
-  }, []);
-
-  // ===================== Vibration =====================
-  useEffect(() => {
-    Vibration.vibrate(VIBRATION_PATTERN, true);
-    return () => Vibration.cancel();
-  }, []);
-
-  // ===================== Pulse animation =====================
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.15,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [pulseAnim]);
-
-  const stopAlarm = async () => {
-    try {
-      Vibration.cancel();
-      if (sound) {
-        await sound.stopAsync().catch(() => {});
-        await sound.unloadAsync().catch(() => {});
-      }
-    } catch {
-      // no-op
-    }
+    snoozeCount: p.snoozeCount,
   };
 
-  const closeScreen = () => {
-    if (navigation.canGoBack()) navigation.goBack();
-    else {
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "MainTabs" as any }],
-      });
-    }
-  };
+  const {
+    pulseAnim,
+    snoozeCount,
+    SNOOZE_LIMIT,
+    onComplete,
+    onSnooze,
+    onDismiss,
+  } = useAlarmScreen(params);
 
-  // ✅ Obtener base nextDueAt desde cache (para sumar minutos encima)
-  const getBaseNextDueAtForMed = async (): Promise<Date> => {
-    const now = new Date();
-
-    try {
-      if (!ownerUid || !medId) return now;
-
-      const cached = await syncQueueService.getItemFromCache(
-        "medications",
-        ownerUid,
-        medId
-      );
-
-      const cachedNext = toDateSafe((cached as any)?.nextDueAt);
-
-      // Si ya hay una próxima toma futura, usamos esa como base
-      if (cachedNext && cachedNext.getTime() > now.getTime()) return cachedNext;
-
-      // Si no, base = ahora
-      return now;
-    } catch {
-      return now;
-    }
-  };
-
-  // ================================================================
-  //   ✅ TOMAR (MED / HABIT)
-  // ================================================================
-  const handleComplete = async () => {
-    if (isProcessingRef.current) return;
-    isProcessingRef.current = true;
-
-    await stopAlarm();
-
-    try {
-      if (type === "med" && medId && ownerUid) {
-        const now = new Date();
-        const newQty = Math.max(
-          0,
-          (cantidadActual ?? 0) - (cantidadPorToma ?? 1)
-        );
-
-        const updateData: Record<string, any> = {
-          lastTakenAt: now.toISOString(),
-          cantidadActual: newQty,
-          cantidad: newQty,
-          updatedAt: now.toISOString(),
-          currentAlarmId: null,
-
-          // ✅ al completar, limpiamos snooze
-          snoozeCount: 0,
-          snoozedUntil: null,
-          lastSnoozeAt: null,
-        };
-
-        const interval = freqToMs(frecuencia);
-        if (interval > 0) {
-          const nextDueAt = new Date(now.getTime() + interval);
-          updateData.nextDueAt = nextDueAt.toISOString();
-          updateData.proximaToma = nextDueAt.toLocaleTimeString("es-MX", {
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-
-          try {
-            const result = await offlineAlarmService.scheduleMedicationAlarm(
-              nextDueAt,
-              {
-                nombre: title,
-                dosis: doseLabel,
-                imageUri: imageUri,
-                medId: medId,
-                ownerUid: ownerUid,
-                frecuencia: frecuencia,
-                cantidadActual: newQty,
-                cantidadPorToma: cantidadPorToma,
-                patientName: patientName,
-                snoozeCount: 0,
-              }
-            );
-
-            if (result.success && result.notificationId) {
-              updateData.currentAlarmId = result.notificationId;
-            }
-          } catch {
-            // no-op
-          }
-        }
-
-        await syncQueueService.updateItemInCache(
-          "medications",
-          ownerUid,
-          medId,
-          updateData
-        );
-
-        await syncQueueService.enqueue(
-          "UPDATE",
-          "medications",
-          medId,
-          ownerUid,
-          updateData
-        );
-
-        await waitForPersistence();
-
-        // ✅ no bloquea cierre si estás offline
-        fireAndForget(
-          logComplianceSuccess({
-            patientUid: ownerUid,
-            itemId: medId,
-            itemName: title,
-            itemType: "med",
-            afterSnoozes: snoozeCount,
-          })
-        );
-      } else if (type === "habit" && habitId && ownerUid) {
-        const now = new Date();
-
-        const updateData = {
-          currentAlarmId: null,
-          snoozeCount: 0,
-          snoozedUntil: null,
-          lastSnoozeAt: null,
-          lastCompletedAt: now.toISOString(),
-          updatedAt: now.toISOString(),
-        };
-
-        await syncQueueService.updateItemInCache(
-          "habits",
-          ownerUid,
-          habitId,
-          updateData
-        );
-
-        await syncQueueService.enqueue(
-          "UPDATE",
-          "habits",
-          habitId,
-          ownerUid,
-          updateData
-        );
-
-        await waitForPersistence();
-
-        // ✅ no bloquea cierre si estás offline
-        fireAndForget(
-          logComplianceSuccess({
-            patientUid: ownerUid,
-            itemId: habitId,
-            itemName: title,
-            itemType: "habit",
-            afterSnoozes: snoozeCount,
-          })
-        );
-      }
-    } catch {
-      // no-op
-    } finally {
-      isProcessingRef.current = false;
-      closeScreen();
-    }
-  };
-
-  // ================================================================
-  //   ✅ POSPONER (MED / HABIT)
-  // ================================================================
-  const handleSnooze = async (minutes: number) => {
-    if (isProcessingRef.current) return;
-    isProcessingRef.current = true;
-
-    const newSnoozeCount = snoozeCount + 1;
-    setSnoozeCount(newSnoozeCount);
-
-    await stopAlarm();
-
-    try {
-      const itemId = type === "med" ? medId : habitId;
-
-      // ✅ logs/notificaciones NO bloquean (para que offline no se cuelgue)
-      if (ownerUid && itemId) {
-        fireAndForget(
-          logSnoozeEvent({
-            patientUid: ownerUid,
-            itemId,
-            itemName: title,
-            itemType: type,
-            snoozeMinutes: minutes,
-            snoozeCount: newSnoozeCount,
-          })
-        );
-
-        if (newSnoozeCount >= SNOOZE_LIMIT) {
-          fireAndForget(
-            notifyCaregiversAboutNoncompliance({
-              patientUid: ownerUid,
-              patientName: patientName || "Paciente",
-              medicationName: title,
-              snoozeCount: newSnoozeCount,
-              type,
-            })
-          );
-        }
-      }
-
-      let newAlarmId: string | null = null;
-
-      // =================== MEDS: mover nextDueAt/proximaToma ===================
-      if (type === "med" && medId && ownerUid) {
-        // ✅ Base = nextDueAt existente (si futuro), si no: ahora
-        const base = await getBaseNextDueAtForMed();
-        const newDueAt = new Date(base.getTime() + minutes * 60 * 1000);
-
-        // ✅ programar alarma con nueva fecha
-        try {
-          const result = await offlineAlarmService.scheduleMedicationAlarm(
-            newDueAt,
-            {
-              nombre: title,
-              dosis: doseLabel,
-              imageUri,
-              medId,
-              ownerUid,
-              frecuencia,
-              cantidadActual,
-              cantidadPorToma,
-              patientName,
-              snoozeCount: newSnoozeCount,
-            }
-          );
-
-          if (result.success) {
-            newAlarmId = result.notificationId;
-          }
-        } catch {
-          // no-op
-        }
-
-        const updateData: Record<string, any> = {
-          currentAlarmId: newAlarmId,
-          snoozeCount: newSnoozeCount,
-          snoozedUntil: newDueAt.toISOString(),
-          lastSnoozeAt: new Date().toISOString(),
-
-          // ✅ CLAVE: mover próxima toma (esto actualiza MedsToday offline/online)
-          nextDueAt: newDueAt.toISOString(),
-          proximaToma: newDueAt.toLocaleTimeString("es-MX", {
-            hour: "2-digit",
-            minute: "2-digit",
-          }),
-
-          updatedAt: new Date().toISOString(),
-        };
-
-        await syncQueueService.updateItemInCache(
-          "medications",
-          ownerUid,
-          medId,
-          updateData
-        );
-
-        await syncQueueService.enqueue(
-          "UPDATE",
-          "medications",
-          medId,
-          ownerUid,
-          updateData
-        );
-
-        await waitForPersistence();
-      }
-
-      // =================== HABITS: solo mover trigger (no nextDueAt) ===================
-      else if (type === "habit" && habitId && ownerUid) {
-        const newTriggerTime = new Date(Date.now() + minutes * 60 * 1000);
-
-        try {
-          const result = await offlineAlarmService.scheduleHabitAlarm(
-            newTriggerTime,
-            {
-              name: title,
-              icon: habitIcon,
-              lib: habitLib,
-              habitId,
-              ownerUid,
-              patientName,
-              snoozeCount: newSnoozeCount,
-            }
-          );
-
-          if (result.success) {
-            newAlarmId = result.notificationId;
-          }
-        } catch {
-          // no-op
-        }
-
-        const updateData = {
-          currentAlarmId: newAlarmId,
-          snoozeCount: newSnoozeCount,
-          snoozedUntil: newTriggerTime.toISOString(),
-          lastSnoozeAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        await syncQueueService.updateItemInCache(
-          "habits",
-          ownerUid,
-          habitId,
-          updateData
-        );
-
-        await syncQueueService.enqueue(
-          "UPDATE",
-          "habits",
-          habitId,
-          ownerUid,
-          updateData
-        );
-
-        await waitForPersistence();
-      }
-    } catch {
-      // no-op
-    } finally {
-      isProcessingRef.current = false;
-      closeScreen();
-    }
-  };
-
-  // ================================================================
-  //   ✅ DESCARTAR
-  // ================================================================
-  const handleDismiss = async () => {
-    if (isProcessingRef.current) return;
-    isProcessingRef.current = true;
-
-    await stopAlarm();
-
-    try {
-      const itemId = type === "med" ? medId : habitId;
-
-      // ✅ no bloquear cierre
-      if (ownerUid && itemId) {
-        fireAndForget(
-          logDismissalEvent({
-            patientUid: ownerUid,
-            itemId,
-            itemName: title,
-            itemType: type,
-            snoozeCountBeforeDismiss: snoozeCount,
-          })
-        );
-
-        fireAndForget(
-          notifyCaregiversAboutDismissal({
-            patientUid: ownerUid,
-            patientName: patientName || "Paciente",
-            itemName: title,
-            itemType: type,
-            snoozeCountBeforeDismiss: snoozeCount,
-          })
-        );
-      }
-    } catch {
-      // no-op
-    }
-
-    await waitForPersistence();
-    isProcessingRef.current = false;
-    closeScreen();
-  };
-
-  // ================================================================
-  //   RENDER
-  // ================================================================
   let iconElement: React.ReactNode;
 
-  if (type === "med" && imageUri) {
+  if (params.type === "med" && params.imageUri) {
     iconElement = (
       <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-        <Image source={{ uri: imageUri }} style={styles.medImage} />
+        <Image source={{ uri: params.imageUri }} style={styles.medImage} />
       </Animated.View>
     );
-  } else if (type === "habit" && habitIcon && habitLib) {
-    const IconLib = habitLib === "FontAwesome5" ? FontAwesome5 : MaterialIcons;
+  } else if (params.type === "habit" && params.habitIcon && params.habitLib) {
+    const IconLib =
+      params.habitLib === "FontAwesome5" ? FontAwesome5 : MaterialIcons;
     iconElement = (
       <Animated.View
         style={[styles.iconCircle, { transform: [{ scale: pulseAnim }] }]}
       >
-        <IconLib name={habitIcon as any} size={64} color="#fff" />
+        <IconLib name={params.habitIcon as any} size={64} color="#fff" />
       </Animated.View>
     );
   } else {
@@ -598,7 +85,7 @@ export default function AlarmScreen() {
         style={[styles.iconCircle, { transform: [{ scale: pulseAnim }] }]}
       >
         <MaterialIcons
-          name={type === "med" ? "medication" : "alarm"}
+          name={params.type === "med" ? "medication" : "alarm"}
           size={64}
           color="#fff"
         />
@@ -612,7 +99,8 @@ export default function AlarmScreen() {
       <SafeAreaView style={styles.safe}>
         <View style={styles.content}>
           <View style={styles.iconContainer}>{iconElement}</View>
-          <Text style={styles.title}>{title || "¡Alarma!"}</Text>
+
+          <Text style={styles.title}>{params.title || "¡Alarma!"}</Text>
 
           {snoozeCount > 0 && (
             <View style={styles.snoozeCountBadge}>
@@ -625,14 +113,16 @@ export default function AlarmScreen() {
             </View>
           )}
 
-          {type === "med" && doseLabel && (
+          {params.type === "med" && params.doseLabel && (
             <View style={styles.doseChip}>
               <MaterialIcons name="medical-services" size={20} color="#fff" />
-              <Text style={styles.doseText}>{doseLabel}</Text>
+              <Text style={styles.doseText}>{params.doseLabel}</Text>
             </View>
           )}
 
-          {message && <Text style={styles.message}>{message}</Text>}
+          {params.message ? (
+            <Text style={styles.message}>{params.message}</Text>
+          ) : null}
 
           <Text style={styles.time}>
             {new Date().toLocaleTimeString("es-MX", {
@@ -641,20 +131,17 @@ export default function AlarmScreen() {
             })}
           </Text>
 
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={handleComplete}
-          >
+          <TouchableOpacity style={styles.primaryButton} onPress={onComplete}>
             <MaterialIcons name="check-circle" size={28} color="#fff" />
             <Text style={styles.primaryButtonText}>
-              {type === "med" ? "Tomar ahora" : "Hecho"}
+              {params.type === "med" ? "Tomar ahora" : "Hecho"}
             </Text>
           </TouchableOpacity>
 
           <View style={styles.snoozeRow}>
             <TouchableOpacity
               style={styles.snoozeButton}
-              onPress={() => handleSnooze(5)}
+              onPress={() => onSnooze(5)}
             >
               <MaterialIcons name="snooze" size={18} color="#fff" />
               <Text style={styles.snoozeText}>5 min</Text>
@@ -662,7 +149,7 @@ export default function AlarmScreen() {
 
             <TouchableOpacity
               style={styles.snoozeButton}
-              onPress={() => handleSnooze(10)}
+              onPress={() => onSnooze(10)}
             >
               <MaterialIcons name="snooze" size={18} color="#fff" />
               <Text style={styles.snoozeText}>10 min</Text>
@@ -680,10 +167,7 @@ export default function AlarmScreen() {
             </View>
           )}
 
-          <TouchableOpacity
-            onPress={handleDismiss}
-            style={styles.dismissButton}
-          >
+          <TouchableOpacity onPress={onDismiss} style={styles.dismissButton}>
             <MaterialIcons
               name="notifications-off"
               size={16}
@@ -747,11 +231,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#FFA726",
   },
-  snoozeCountText: {
-    color: "#FFA726",
-    fontSize: 12,
-    fontWeight: "700",
-  },
+  snoozeCountText: { color: "#FFA726", fontSize: 12, fontWeight: "700" },
   doseChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -762,11 +242,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     gap: 8,
   },
-  doseText: {
-    color: "#000",
-    fontSize: 14,
-    fontWeight: "700",
-  },
+  doseText: { color: "#000", fontSize: 14, fontWeight: "700" },
   message: {
     fontSize: 18,
     color: "rgba(255,255,255,0.85)",
@@ -807,11 +283,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.3)",
   },
-  snoozeText: {
-    color: "#fff",
-    fontSize: 14,
-    fontWeight: "700",
-  },
+  snoozeText: { color: "#fff", fontSize: 14, fontWeight: "700" },
   warningBox: {
     flexDirection: "row",
     alignItems: "center",

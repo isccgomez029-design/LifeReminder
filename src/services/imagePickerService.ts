@@ -27,7 +27,7 @@ export async function pickImageFromGallery(): Promise<string | null> {
 
     return result.assets[0].uri;
   } catch (e) {
-    console.log("Error al elegir de galería:", e);
+
     Alert.alert("Error", "No se pudo abrir la galería.");
     return null;
   }
@@ -58,7 +58,7 @@ export async function takePhotoWithCamera(): Promise<string | null> {
 
     return result.assets[0].uri;
   } catch (e) {
-    console.log("Error al tomar foto:", e);
+
     Alert.alert("Error", "No se pudo abrir la cámara.");
     return null;
   }

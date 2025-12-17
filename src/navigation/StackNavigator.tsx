@@ -1,10 +1,7 @@
 // src/navigation/StackNavigator.tsx
 import React from "react";
 import { createStackNavigator } from "@react-navigation/stack";
-import {
-  NavigationContainerRef,
-  createNavigationContainerRef,
-} from "@react-navigation/native";
+import { createNavigationContainerRef } from "@react-navigation/native";
 import { View, Text, Image, StyleSheet } from "react-native";
 
 import LoginScreen from "../screens/auth/LoginScreen";
@@ -28,6 +25,7 @@ import HistoryScreen from "../screens/history/HistoryScreen";
 import CareNetworkScreen from "../screens/care/CareNetworkScreen";
 import CareInvitesScreen from "../screens/care/CareInvitesScreen";
 import MyPatientsScreen from "../screens/care/MyPatientsScreen";
+import CaregiverNotificationsScreen from "../screens/care/CaregiverNotificationsScreen"; // ✅ NUEVO
 
 import SettingsScreen from "../screens/settings/SettingsScreen";
 import ProfileScreen from "../screens/profile/ProfileScreen";
@@ -67,7 +65,7 @@ export type Habit = {
 };
 
 /* ====================================================
-   RootStackParamList CORREGIDO PARA PACIENTES
+   RootStackParamList
 ==================================================== */
 
 export type RootStackParamList = {
@@ -78,21 +76,9 @@ export type RootStackParamList = {
 
   Home: undefined;
 
-  // 🧪 Meds con soporte para cuidadores
-  MedsToday:
-    | {
-        patientUid?: string;
-        patientName?: string;
-      }
-    | undefined;
+  MedsToday: { patientUid?: string; patientName?: string } | undefined;
 
-  // 🧪 Hábitos con soporte para cuidadores
-  NewReminder:
-    | {
-        patientUid?: string;
-        patientName?: string;
-      }
-    | undefined;
+  NewReminder: { patientUid?: string; patientName?: string } | undefined;
 
   AddHabit: {
     mode: "new" | "edit";
@@ -101,13 +87,11 @@ export type RootStackParamList = {
     patientName?: string;
   };
 
-  // 🧪 Citas con soporte completo
   Appointments:
     | {
         action?: "create" | "edit";
         savedAppt?: AppointmentParam;
         editedAppt?: AppointmentParam;
-
         patientUid?: string;
         patientName?: string;
       }
@@ -117,13 +101,11 @@ export type RootStackParamList = {
     | {
         mode?: "new" | "edit";
         appt?: AppointmentParam;
-
         patientUid?: string;
         patientName?: string;
       }
     | undefined;
 
-  // 🧪 Medicamentos con soporte para cuidador
   AddMedication:
     | {
         medId?: string;
@@ -134,23 +116,17 @@ export type RootStackParamList = {
           proximaToma?: string;
           cantidad?: number;
         };
-
         patientUid?: string;
         patientName?: string;
       }
     | undefined;
 
-  // 🧪 Historial para cuidadores
-  History:
-    | {
-        patientUid?: string;
-        patientName?: string;
-      }
-    | undefined;
+  History: { patientUid?: string; patientName?: string } | undefined;
 
   CareNetwork: undefined;
   CareInvites: undefined;
   MyPatients: undefined;
+  CaregiverNotifications: undefined; // ✅ NUEVO
 
   Settings: undefined;
   Profile: undefined;
@@ -183,7 +159,7 @@ function LogoTitle() {
 }
 
 /* ====================================================
-   STACK NAVIGATOR COMPLETO
+   STACK NAVIGATOR
 ==================================================== */
 
 export default function StackNavigator() {
@@ -199,7 +175,7 @@ export default function StackNavigator() {
         headerRightContainerStyle: { paddingRight: 12 },
       }}
     >
-      {/* ===== AUTH (sin header) ===== */}
+      {/* ===== AUTH ===== */}
       <Stack.Screen
         name="Login"
         component={LoginScreen}
@@ -241,6 +217,7 @@ export default function StackNavigator() {
         component={NewReminderScreen}
         options={{ title: "Hábitos y recordatorios" }}
       />
+
       <Stack.Screen
         name="AddHabit"
         component={AddHabitScreen}
@@ -278,6 +255,18 @@ export default function StackNavigator() {
       />
 
       <Stack.Screen
+        name="CaregiverNotifications"
+        component={CaregiverNotificationsScreen}
+        options={{ title: "Notificaciones" }}
+      />
+
+      <Stack.Screen
+        name="CareInvites"
+        component={CareInvitesScreen}
+        options={{ title: "Invitaciones de cuidado" }}
+      />
+
+      <Stack.Screen
         name="Settings"
         component={SettingsScreen}
         options={{ title: "Configuración" }}
@@ -289,7 +278,7 @@ export default function StackNavigator() {
         options={{ title: "Perfil" }}
       />
 
-      {/* 🔔 Pantalla de alarma */}
+      {/* 🔔 ALARMA */}
       <Stack.Screen
         name="Alarm"
         component={AlarmScreen}
@@ -299,12 +288,6 @@ export default function StackNavigator() {
           gestureEnabled: false,
           cardStyle: { backgroundColor: "black" },
         }}
-      />
-
-      <Stack.Screen
-        name="CareInvites"
-        component={CareInvitesScreen}
-        options={{ title: "Invitaciones de cuidado" }}
       />
     </Stack.Navigator>
   );

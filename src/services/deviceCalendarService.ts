@@ -1,8 +1,6 @@
 // src/services/deviceCalendarService.ts
 import * as Calendar from "expo-calendar";
 
-// ⚠️ Pensado para Android (tu app es solo Android), pero funciona también en iOS si algún día lo necesitas.
-
 export async function ensureCalendarIdAndroid(): Promise<string> {
   const { status } = await Calendar.requestCalendarPermissionsAsync();
   if (status !== "granted") {
@@ -81,10 +79,5 @@ export async function upsertAndroidEvent(a: {
 export async function deleteAndroidEvent(eventId: string) {
   try {
     await Calendar.deleteEventAsync(eventId);
-  } catch (e) {
-    console.log(
-      "No se pudo eliminar evento del calendario del dispositivo:",
-      e
-    );
-  }
+  } catch (e) {}
 }

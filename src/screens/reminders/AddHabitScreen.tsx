@@ -1,7 +1,7 @@
 // src/screens/reminders/AddHabitScreen.tsx
-// ✅ CORREGIDO: Soporte offline completo
 
-import React, { useState } from "react";
+
+import React from "react";
 import {
   View,
   Text,
@@ -9,30 +9,22 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { COLORS, FONT_SIZES } from "../../../types";
 import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
-import { RootStackParamList, Habit } from "../../navigation/StackNavigator";
+import { RootStackParamList } from "../../navigation/StackNavigator";
 
-// ✅ Servicios offline
-import { syncQueueService } from "../../services/offline/SyncQueueService";
-import { offlineAuthService } from "../../services/offline/OfflineAuthService";
-
-// Firebase
-import { auth } from "../../config/firebaseConfig";
-
-// Servicios
-import { scheduleRecurringHabitAlarms } from "../../services/alarmHelpers";
-
-// Utils
-import { normalizeTime, formatHHMMDisplay } from "../../utils/timeUtils";
-
-// Hora UI
+// UI
 import TimePickerField from "../../components/TimePickerField";
+
+// Utils solo para display (UI)
+import { formatHHMMDisplay } from "../../utils/timeUtils";
+
+// ✅ Hook (toda la lógica)
+import { useAddHabit } from "../../hooks/useAddHabit";
 
 type AddHabitRoute = RouteProp<RootStackParamList, "AddHabit">;
 type Nav = StackNavigationProp<RootStackParamList, "AddHabit">;
@@ -55,121 +47,28 @@ export default function AddHabitScreen() {
   const route = useRoute<AddHabitRoute>();
   const navigation = useNavigation<Nav>();
 
-  const mode = route.params?.mode ?? "new";
-  const habit = route.params?.habit as Habit | undefined;
-  const isEdit = mode === "edit";
+  const {
+    isEdit,
 
-  const [name, setName] = useState(habit?.name ?? "");
-  const [icon, setIcon] = useState<string | undefined>(habit?.icon);
-  const [lib, setLib] = useState<"FontAwesome5" | "MaterialIcons">(
-    habit?.lib ?? "MaterialIcons"
-  );
-  const [priority, setPriority] = useState<"baja" | "normal" | "alta">(
-    (habit?.priority as any) || "normal"
-  );
-  const [days, setDays] = useState<number[]>(habit?.days ?? []);
-  const [times, setTimes] = useState<string[]>(habit?.times ?? []);
+    name,
+    icon,
+    lib,
+    priority,
+    days,
+    times,
+    newTime,
 
-  const [newTime, setNewTime] = useState(times[0] ?? "08:00");
+    setName,
+    setIcon,
+    setLib,
+    setPriority,
+    setNewTime,
 
-  const toggleDay = (idx: number) => {
-    setDays((prev) =>
-      prev.includes(idx) ? prev.filter((d) => d !== idx) : [...prev, idx]
-    );
-  };
-
-  const addTime = () => {
-    const final = normalizeTime(newTime);
-    if (!final) {
-      Alert.alert("Hora inválida", "Selecciona una hora válida.");
-      return;
-    }
-    setTimes((prev) => {
-      if (prev.includes(final)) return prev;
-      return [...prev, final].sort();
-    });
-  };
-
-  const removeTime = (t: string) => {
-    setTimes((prev) => prev.filter((x) => x !== t));
-  };
-
-  const save = async () => {
-    if (!name.trim())
-      return Alert.alert("Falta información", "Escribe un nombre.");
-    if (!icon) return Alert.alert("Icono", "Selecciona un icono.");
-    if (days.length === 0) return Alert.alert("Días", "Elige al menos un día.");
-    if (times.length === 0)
-      return Alert.alert("Horarios", "Agrega al menos un horario.");
-
-    // ✅ CORREGIDO: Usar offlineAuthService como fallback
-    const userId = auth.currentUser?.uid || offlineAuthService.getCurrentUid();
-
-    if (!userId) {
-      return Alert.alert("Error", "Debe iniciar sesión.");
-    }
-
-    const sortedTimes = [...times].sort();
-
-    try {
-      const habitId =
-        isEdit && habit?.id
-          ? habit.id
-          : `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      const habitData = {
-        id: habitId,
-        name: name.trim(),
-        icon,
-        lib,
-        priority,
-        days,
-        times: sortedTimes,
-        createdAt: (habit as any)?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isArchived: false,
-      };
-
-      if (isEdit && habit?.id) {
-        await syncQueueService.enqueue(
-          "UPDATE",
-          "habits",
-          habit.id,
-          userId, // ✅ Usar userId
-          habitData
-        );
-      } else {
-        await syncQueueService.enqueue(
-          "CREATE",
-          "habits",
-          habitId,
-          userId, // ✅ Usar userId
-          habitData
-        );
-      }
-
-      // Programar alarmas (localmente siempre, para que suenen)
-      await scheduleRecurringHabitAlarms({
-        id: habitId,
-        name: name.trim(),
-        times: sortedTimes,
-        days,
-        icon,
-        lib,
-        ownerUid: userId, // ✅ Pasar userId
-      });
-
-      Alert.alert(
-        "Listo",
-        isEdit ? "Hábito actualizado." : "Hábito creado correctamente."
-      );
-
-      navigation.goBack();
-    } catch (e: any) {
-      console.log(e);
-      Alert.alert("Error", e?.message ?? "No se pudo guardar el hábito");
-    }
-  };
+    toggleDay,
+    addTime,
+    removeTime,
+    save,
+  } = useAddHabit({ route });
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -296,7 +195,13 @@ export default function AddHabitScreen() {
           </View>
 
           {/* Guardar */}
-          <TouchableOpacity style={styles.primaryBtn} onPress={save}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={async () => {
+              const res = await save();
+              if (res?.ok) navigation.goBack();
+            }}
+          >
             <Text style={styles.primaryText}>
               {isEdit ? "Guardar cambios" : "Confirmar"}
             </Text>

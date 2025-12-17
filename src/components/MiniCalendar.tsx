@@ -3,14 +3,14 @@
 // Importaciones necesarias
 import React, { useMemo, useState } from "react";
 import {
-  View, // contenedor básico
-  Text, // para mostrar texto
-  TouchableOpacity, // botones táctiles
-  StyleSheet, // estilos
-  ViewStyle, // tipo para estilos de vista
+  View, 
+  Text, 
+  TouchableOpacity, 
+  StyleSheet, 
+  ViewStyle, 
 } from "react-native";
-import { MaterialIcons } from "@expo/vector-icons"; // iconos de navegación
-import { COLORS, FONT_SIZES } from "../../types"; // constantes de colores y fuentes
+import { MaterialIcons } from "@expo/vector-icons";
+import { COLORS, FONT_SIZES } from "../../types"; 
 
 // Props que recibe el componente
 type MiniCalendarProps = {

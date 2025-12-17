@@ -1,18 +1,13 @@
 // src/utils/archiveHelpers.ts
-// ✅ CORREGIDO: Actualiza cache inmediatamente antes de encolar
-// ==========================================================
+
 
 import { syncQueueService } from "../services/offline/SyncQueueService";
 import { offlineAlarmService } from "../services/offline/OfflineAlarmService";
 
 /* ==========================================================
-   🔔 CANCELAR ALARMAS DE UN ITEM
+    CANCELAR ALARMAS 
    ========================================================== */
 
-/**
- * Cancela todas las alarmas programadas para un item específico
- * ✅ ACTUALIZADO: Usa offlineAlarmService
- */
 async function cancelItemAlarms(
   itemId: string,
   ownerUid: string,
@@ -22,7 +17,6 @@ async function cancelItemAlarms(
     // 1. Cancelar alarma actual si existe
     if (currentAlarmId) {
       await offlineAlarmService.cancelAlarm(currentAlarmId);
-      console.log(`🔕 Alarma cancelada (ID: ${currentAlarmId})`);
     }
 
     // 2. Cancelar todas las alarmas del item usando el servicio offline
@@ -30,16 +24,7 @@ async function cancelItemAlarms(
       itemId,
       ownerUid
     );
-
-    if (canceledCount > 0) {
-      console.log(`🔕 ${canceledCount} alarmas canceladas para ${itemId}`);
-    }
-
-    console.log(`✅ Alarmas de item ${itemId} procesadas`);
-  } catch (error) {
-    console.log("⚠️ Error cancelando alarmas:", error);
-    // No lanzar error - la operación de archivar debe continuar
-  }
+  } catch (error) {}
 }
 
 /* ==========================================================
@@ -59,7 +44,7 @@ export async function archiveMedication(
     medId
   );
 
-  // ✅ CANCELAR ALARMAS ANTES DE ARCHIVAR
+  //  CANCELAR ALARMAS ANTES DE ARCHIVAR
   const alarmId = currentData?.currentAlarmId || medData?.currentAlarmId;
   await cancelItemAlarms(medId, userId, alarmId);
 
@@ -74,7 +59,7 @@ export async function archiveMedication(
     lastSnoozeAt: null,
   };
 
-  // ✅ PRIMERO: Actualizar cache local inmediatamente
+  // PRIMERO: Actualizar cache local inmediatamente
   await syncQueueService.updateItemInCache(
     "medications",
     userId,
@@ -82,9 +67,7 @@ export async function archiveMedication(
     archiveData
   );
 
-  console.log(`💾 Cache actualizado: medicamento ${medId} archivado`);
-
-  // ✅ SEGUNDO: Encolar para sincronización con Firestore
+  // SEGUNDO: Encolar para sincronización con Firestore
   await syncQueueService.enqueue(
     "UPDATE",
     "medications",
@@ -92,8 +75,6 @@ export async function archiveMedication(
     userId,
     archiveData
   );
-
-  console.log(`📦 Medicamento ${medId} archivado y encolado`);
 }
 
 /* ==========================================================
@@ -112,7 +93,7 @@ export async function archiveHabit(
     habitId
   );
 
-  // ✅ CANCELAR ALARMAS ANTES DE ARCHIVAR
+  //  CANCELAR ALARMAS ANTES DE ARCHIVAR
   const alarmId = currentData?.currentAlarmId || habitData?.currentAlarmId;
   await cancelItemAlarms(habitId, userId, alarmId);
 
@@ -128,7 +109,7 @@ export async function archiveHabit(
     lastSnoozeAt: null,
   };
 
-  // ✅ PRIMERO: Actualizar cache local
+  // PRIMERO: Actualizar cache local
   await syncQueueService.updateItemInCache(
     "habits",
     userId,
@@ -136,9 +117,7 @@ export async function archiveHabit(
     archiveData
   );
 
-  console.log(`💾 Cache actualizado: hábito ${habitId} archivado`);
-
-  // ✅ SEGUNDO: Encolar para Firestore
+  // SEGUNDO: Encolar para Firestore
   await syncQueueService.enqueue(
     "UPDATE",
     "habits",
@@ -146,8 +125,6 @@ export async function archiveHabit(
     userId,
     archiveData
   );
-
-  console.log(`📦 Hábito ${habitId} archivado y encolado`);
 }
 
 /* ==========================================================
@@ -166,7 +143,7 @@ export async function archiveAppointment(
     appointmentId
   );
 
-  // ✅ CANCELAR RECORDATORIOS DE CITA
+  //  CANCELAR RECORDATORIOS DE CITA
   await cancelItemAlarms(appointmentId, userId, null);
 
   const archiveData = {
@@ -175,7 +152,7 @@ export async function archiveAppointment(
     updatedAt: now,
   };
 
-  // ✅ PRIMERO: Actualizar cache local
+  //  PRIMERO: Actualizar cache local
   await syncQueueService.updateItemInCache(
     "appointments",
     userId,
@@ -183,9 +160,7 @@ export async function archiveAppointment(
     archiveData
   );
 
-  console.log(`💾 Cache actualizado: cita ${appointmentId} archivada`);
-
-  // ✅ SEGUNDO: Encolar para Firestore
+  // SEGUNDO: Encolar para Firestore
   await syncQueueService.enqueue(
     "UPDATE",
     "appointments",
@@ -193,8 +168,6 @@ export async function archiveAppointment(
     userId,
     archiveData
   );
-
-  console.log(`📦 Cita ${appointmentId} archivada y encolada`);
 }
 
 /* ==========================================================
@@ -232,7 +205,7 @@ export async function restoreItem(
     updatedAt: now,
   };
 
-  // ✅ PRIMERO: Actualizar cache local
+  // PRIMERO: Actualizar cache local
   await syncQueueService.updateItemInCache(
     collection,
     userId,
@@ -240,9 +213,7 @@ export async function restoreItem(
     restoreData
   );
 
-  console.log(`💾 Cache actualizado: ${collection} ${itemId} restaurado`);
-
-  // ✅ SEGUNDO: Encolar para Firestore
+  // SEGUNDO: Encolar para Firestore
   await syncQueueService.enqueue(
     "UPDATE",
     collection,
@@ -251,21 +222,18 @@ export async function restoreItem(
     restoreData
   );
 
-  console.log(`♻️ ${collection} ${itemId} restaurado y encolado`);
 
-  // NOTA: Las alarmas NO se reprograman automáticamente al restaurar.
-  // El usuario deberá configurarlas de nuevo si es necesario.
 }
 
 /* ==========================================================
-   ELIMINACIÓN PERMANENTE (hard delete)
+   ELIMINACIÓN PERMANENTE 
    ========================================================== */
 export async function hardDeleteItem(
   collection: "medications" | "habits" | "appointments",
   itemId: string,
   userId: string
 ): Promise<void> {
-  // ✅ CANCELAR ALARMAS ANTES DE ELIMINAR
+  //  CANCELAR ALARMAS ANTES DE ELIMINAR
   const currentData = await syncQueueService.getItemFromCache(
     collection,
     userId,
@@ -278,19 +246,15 @@ export async function hardDeleteItem(
     await cancelItemAlarms(itemId, userId, null);
   }
 
-  // ✅ PRIMERO: Eliminar del cache local
+  //  PRIMERO: Eliminar del cache local
   await syncQueueService.removeItemFromCache(collection, userId, itemId);
 
-  console.log(`💾 Cache actualizado: ${collection} ${itemId} eliminado`);
-
-  // ✅ SEGUNDO: Encolar eliminación para Firestore
+  //  SEGUNDO: Encolar eliminación para Firestore
   await syncQueueService.enqueue("DELETE", collection, itemId, userId, {});
-
-  console.log(`🗑️ ${collection} ${itemId} eliminado permanentemente`);
 }
 
 /* ==========================================================
-   🆕 VERIFICAR SI UN ITEM ESTÁ ARCHIVADO
+   VERIFICAR SI UN ITEM ESTÁ ARCHIVADO
    ========================================================== */
 export async function isItemArchived(
   collection: "medications" | "habits" | "appointments",
@@ -308,14 +272,13 @@ export async function isItemArchived(
 
     return itemData.isArchived === true || !!itemData.archivedAt;
   } catch (error) {
-    console.log("Error verificando estado de archivo:", error);
     return false;
   }
 }
 
 /* ==========================================================
-   🆕 CANCELAR ALARMA SI ITEM ESTÁ ARCHIVADO
-   Útil para verificar antes de mostrar alarma
+   CANCELAR ALARMA SI ITEM ESTÁ ARCHIVADO
+
    ========================================================== */
 export async function cancelAlarmIfArchived(
   collection: "medications" | "habits",
@@ -327,20 +290,18 @@ export async function cancelAlarmIfArchived(
     const isArchived = await isItemArchived(collection, itemId, userId);
 
     if (isArchived) {
-      console.log(`⚠️ Item ${itemId} está archivado, cancelando alarmas...`);
       await cancelItemAlarms(itemId, userId, alarmId);
       return true; // Indica que la alarma fue cancelada porque el item está archivado
     }
 
     return false; // Item activo, alarma válida
   } catch (error) {
-    console.log("Error verificando estado para cancelar alarma:", error);
     return false;
   }
 }
 
 /* ==========================================================
-   🆕 OBTENER ITEMS ARCHIVADOS
+    OBTENER ITEMS ARCHIVADOS
    ========================================================== */
 export async function getArchivedItems(
   collection: "medications" | "habits" | "appointments",
@@ -350,7 +311,7 @@ export async function getArchivedItems(
 }
 
 /* ==========================================================
-   🆕 OBTENER ITEMS ACTIVOS (NO ARCHIVADOS)
+    OBTENER ITEMS ACTIVOS 
    ========================================================== */
 export async function getActiveItems(
   collection: "medications" | "habits" | "appointments",

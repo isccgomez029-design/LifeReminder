@@ -140,12 +140,10 @@ export interface CareContact {
 }
 
 /* =========================
-   🆕 CUIDADORES / NOTIFICACIONES
+   CUIDADORES / NOTIFICACIONES
    ========================= */
 
-/**
- * Severidad de notificaciones para cuidadores
- */
+
 export type NotificationSeverity = "low" | "medium" | "high";
 
 /**

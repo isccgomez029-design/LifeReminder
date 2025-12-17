@@ -1,32 +1,19 @@
 // src/screens/home/HomeScreen.tsx
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  StatusBar,
   FlatList,
-  Image,
   Dimensions,
-  Platform,
-  Pressable,
-  Alert,
-  BackHandler,
 } from "react-native";
 import { MaterialIcons, FontAwesome5, Entypo } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../navigation/StackNavigator";
 import { COLORS, FONT_SIZES } from "../../../types";
-import {
-  SafeAreaView,
-  useSafeAreaInsets,
-} from "react-native-safe-area-context";
-
-// Firebase Auth
-import { signOut as fbSignOut } from "firebase/auth";
-import { auth } from "../../config/firebaseConfig";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 type HomeNav = StackNavigationProp<RootStackParamList, "Home">;
 
@@ -36,7 +23,8 @@ type MainSectionRoute =
   | "NewReminder"
   | "Appointments"
   | "History"
-  | "CareNetwork";
+  | "CareNetwork"
+  | "MyPatients"; 
 
 type SectionItem = {
   key: string;
@@ -47,9 +35,6 @@ type SectionItem = {
   color: string;
   route: MainSectionRoute;
 };
-
-// ajusta si tu imagen está en otra ruta:
-const loginImage = require("../../../assets/login_image.png");
 
 const SECTIONS: SectionItem[] = [
   {
@@ -97,31 +82,21 @@ const SECTIONS: SectionItem[] = [
     color: COLORS.primary,
     route: "CareNetwork",
   },
+
+
+  {
+    key: "my_patients",
+    title: "Mis pacientes",
+    subtitle: "Gestionar pacientes",
+    iconLib: "MaterialIcons",
+    iconName: "supervisor-account",
+    color: COLORS.secondary,
+    route: "MyPatients",
+  },
 ];
 
 export default function HomeScreen({ navigation }: { navigation: HomeNav }) {
   const data = useMemo(() => SECTIONS, []);
-  const insets = useSafeAreaInsets();
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  // Cerrar con botón "Atrás" en Android cuando el menú está abierto
-  React.useEffect(() => {
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (menuOpen) {
-        setMenuOpen(false);
-        return true;
-      }
-      return false;
-    });
-    return () => sub.remove();
-  }, [menuOpen]);
-
-  const onPressCard = useCallback(
-    (item: SectionItem) => {
-      navigation.navigate(item.route); // ✅ ya no truena TS
-    },
-    [navigation]
-  );
 
   const renderItem = ({ item }: { item: SectionItem }) => {
     const IconCmp =
@@ -134,7 +109,7 @@ export default function HomeScreen({ navigation }: { navigation: HomeNav }) {
     return (
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => onPressCard(item)}
+        onPress={() => navigation.navigate(item.route)}
         style={styles.card}
         accessibilityRole="button"
         accessibilityLabel={item.title}
@@ -146,9 +121,11 @@ export default function HomeScreen({ navigation }: { navigation: HomeNav }) {
             color={COLORS.surface}
           />
         </View>
+
         <Text style={styles.cardTitle} numberOfLines={2}>
           {item.title}
         </Text>
+
         {!!item.subtitle && (
           <Text style={styles.cardSubtitle} numberOfLines={2}>
             {item.subtitle}
@@ -156,33 +133,6 @@ export default function HomeScreen({ navigation }: { navigation: HomeNav }) {
         )}
       </TouchableOpacity>
     );
-  };
-
-  // Acciones del menú (si luego los usas con el UserMenuButton o un popover)
-  const goSettings = () => {
-    setMenuOpen(false);
-    navigation.navigate("Settings");
-  };
-
-  const goProfile = () => {
-    setMenuOpen(false);
-    navigation.navigate("Profile");
-  };
-
-  const handleLogout = async () => {
-    setMenuOpen(false);
-    try {
-      await fbSignOut(auth);
-      navigation.reset({
-        index: 0,
-        routes: [{ name: "Login" as any }],
-      });
-    } catch (err: any) {
-      Alert.alert(
-        "Error al cerrar sesión",
-        err?.message ?? "Intenta de nuevo."
-      );
-    }
   };
 
   return (
@@ -201,7 +151,7 @@ export default function HomeScreen({ navigation }: { navigation: HomeNav }) {
   );
 }
 
-/* ===== Layout para ocupar más pantalla ===== */
+
 const { width: W, height: H } = Dimensions.get("window");
 const SCREEN_PADDING = 16;
 const GUTTER = 16;
@@ -214,7 +164,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
 
-  /* ===== Menú popover (por si lo usas luego) ===== */
   menuContainer: {
     position: "absolute",
     top: "100%",
@@ -269,7 +218,6 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
 
-  /* ===== Tarjeta ===== */
   card: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
