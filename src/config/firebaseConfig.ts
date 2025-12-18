@@ -61,11 +61,7 @@ function createAuth(app: FirebaseApp): Auth {
       persistence: getReactNativePersistence(AsyncStorage),
     });
   } catch (err) {
-    // Si falla la carga de persistencia específica de React Native
-    console.warn(
-      "[Firebase] No se encontró 'firebase/auth/react-native'. Detalle:",
-      err
-    );
+
     try {
       // Intenta inicializar Auth sin persistencia explícita
       return initializeAuth(app);
@@ -85,26 +81,11 @@ function createFirestore(app: FirebaseApp): Firestore {
     if (Platform.OS !== "web") {
       return getFirestore(app);
     }
-
     // En web se debe habilitar explícitamente IndexedDB persistence
     const db = getFirestore(app);
 
-    enableIndexedDbPersistence(db).catch((err) => {
-      if (err.code === "failed-precondition") {
-        // Ocurre cuando hay múltiples pestañas abiertas
-        console.warn(
-          "[Firestore] Persistencia no disponible (múltiples pestañas abiertas)"
-        );
-      } else if (err.code === "unimplemented") {
-        // Ocurre cuando el navegador no soporta IndexedDB
-        console.warn("[Firestore] Persistencia no soportada en este navegador");
-      }
-    });
-
     return db;
   } catch (err) {
-    // Si falla la configuración, se devuelve una instancia básica
-    console.warn("[Firestore] Error configurando persistencia:", err);
     return getFirestore(app);
   }
 }

@@ -25,7 +25,7 @@ import HistoryScreen from "../screens/history/HistoryScreen";
 import CareNetworkScreen from "../screens/care/CareNetworkScreen";
 import CareInvitesScreen from "../screens/care/CareInvitesScreen";
 import MyPatientsScreen from "../screens/care/MyPatientsScreen";
-import CaregiverNotificationsScreen from "../screens/care/CaregiverNotificationsScreen"; // ✅ NUEVO
+import CaregiverNotificationsScreen from "../screens/care/CaregiverNotificationsScreen";
 
 import SettingsScreen from "../screens/settings/SettingsScreen";
 import ProfileScreen from "../screens/profile/ProfileScreen";
@@ -126,7 +126,7 @@ export type RootStackParamList = {
   CareNetwork: undefined;
   CareInvites: undefined;
   MyPatients: undefined;
-  CaregiverNotifications: undefined; // ✅ NUEVO
+  CaregiverNotifications: undefined;
 
   Settings: undefined;
   Profile: undefined;
@@ -162,10 +162,14 @@ function LogoTitle() {
    STACK NAVIGATOR
 ==================================================== */
 
-export default function StackNavigator() {
+type StackNavigatorProps = {
+  initialRoute: keyof RootStackParamList;
+};
+
+export default function StackNavigator({ initialRoute }: StackNavigatorProps) {
   return (
     <Stack.Navigator
-      initialRouteName="Login"
+      initialRouteName={initialRoute}
       screenOptions={{
         headerStyle: { backgroundColor: COLORS.primary },
         headerTintColor: "#fff",

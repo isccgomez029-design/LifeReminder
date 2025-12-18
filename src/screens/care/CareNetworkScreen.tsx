@@ -1,6 +1,5 @@
 // src/screens/care/CareNetworkScreen.tsx
 
-
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -18,6 +17,7 @@ import { MaterialIcons, FontAwesome5 } from "@expo/vector-icons";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../navigation/StackNavigator";
 import { COLORS, FONT_SIZES } from "../../../types";
+import { createCaregiverInvite } from "../../services/careNetworkService";
 
 // Firebase
 import { auth, db } from "../../config/firebaseConfig";
@@ -31,7 +31,6 @@ import {
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
-
 
 import { offlineAuthService } from "../../services/offline/OfflineAuthService";
 import { syncQueueService } from "../../services/offline/SyncQueueService";
@@ -144,7 +143,6 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
         );
 
         if (cached?.data && cached.data.length > 0) {
-
           const list = cached.data
             .filter((item: any) => !item.deleted)
             .map((data: any) => ({
@@ -172,9 +170,7 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
           setIsFromCache(true);
           setLoading(false);
         }
-      } catch (error) {
-
-      }
+      } catch (error) {}
     };
 
     loadFromCache();
@@ -225,7 +221,6 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
         setLoading(false);
       },
       (err) => {
-
         // Si hay error de red, mantener datos del cache
         if (!isOnline) {
           setLoading(false);
@@ -251,7 +246,6 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
     setNewAccessMode("alerts-only");
     setShowAddModal(true);
   };
-
   const handleSaveNewCaregiver = async () => {
     if (!userId) {
       Alert.alert("Sesión requerida", "Inicia sesión de nuevo.");
@@ -269,64 +263,39 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
     try {
       setSaving(true);
 
-      const newCaregiver = {
-        name: newName.trim(),
-        email: newEmail.trim().toLowerCase(),
-        phone: newPhone.trim() || "",
-        relationship: newRelationship.trim() || "",
-        status: "pending" as CaregiverStatus,
-        accessMode: newAccessMode,
-        deleted: false,
-        createdAt: new Date().toISOString(),
-      };
-
       if (isOnline) {
-        // Online: crear directamente en Firebase
-        await addDoc(collection(db, "users", userId, "careNetwork"), {
-          ...newCaregiver,
-          createdAt: serverTimestamp(),
+        // ✅ USAR createCaregiverInvite que busca el caregiverUid automáticamente
+        const result = await createCaregiverInvite({
+          patientUid: userId,
+          caregiverEmail: newEmail.trim(),
+          caregiverName: newName.trim(),
+          relationship: newRelationship.trim(),
+          phone: newPhone.trim(),
+          accessMode: newAccessMode,
         });
-      } else {
-        //  Offline: encolar operación
-        const tempId = `temp_${Date.now()}_${Math.random()
-          .toString(36)
-          .substr(2, 9)}`;
 
-        await syncQueueService.enqueue(
-          "CREATE",
-          "careNetwork",
-          tempId,
-          userId,
-          {
-            ...newCaregiver,
-            id: tempId,
-          }
+        if (!result.success) {
+          Alert.alert(
+            "Error",
+            result.error || "No se pudo crear la invitación"
+          );
+          setSaving(false);
+          return;
+        }
+
+        setShowAddModal(false);
+        Alert.alert(
+          "✅ Invitación enviada",
+          "El cuidador recibirá la invitación cuando inicie sesión en la app."
         );
-
-        // Agregar a cache local
-        await syncQueueService.addToCacheItem("careNetwork", userId, {
-          ...newCaregiver,
-          id: tempId,
-        });
-
-        // Actualizar UI
-        setCaregivers((prev) => [
-          ...prev,
-          { ...newCaregiver, id: tempId } as Caregiver,
-        ]);
-
-        setPendingChanges(await syncQueueService.getPendingCount());
+      } else {
+        // Offline: No se puede crear invitación (necesita buscar al cuidador)
+        Alert.alert(
+          "Conexión requerida",
+          "Necesitas conexión a internet para enviar invitaciones (se debe verificar que el cuidador esté registrado)."
+        );
       }
-
-      setShowAddModal(false);
-      Alert.alert(
-        "Listo",
-        isOnline
-          ? "Se agregó el contacto y la invitación quedó pendiente."
-          : "Se guardará cuando haya conexión."
-      );
     } catch (e: any) {
-
       Alert.alert(
         "Error",
         e?.message ?? "No se pudo agregar el contacto. Intenta nuevamente."
@@ -367,7 +336,6 @@ const CareNetworkScreen: React.FC<{ navigation: Nav }> = ({ navigation }) => {
         setPendingChanges(await syncQueueService.getPendingCount());
       }
     } catch (e: any) {
-
       // Revertir
       setCaregivers((prev) =>
         prev.map((c) => (c.id === id ? { ...c, accessMode: cg.accessMode } : c))

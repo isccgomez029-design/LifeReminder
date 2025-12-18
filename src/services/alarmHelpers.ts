@@ -89,7 +89,7 @@ export async function scheduleRecurringHabitAlarms(habit: {
     }
     return scheduledIds;
   } catch (error) {
-    console.error("❌ Error programando alarmas recurrentes:", error);
+
     return scheduledIds;
   }
 }

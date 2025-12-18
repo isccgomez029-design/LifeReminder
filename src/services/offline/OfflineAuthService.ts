@@ -94,7 +94,6 @@ const OFFLINE_SESSION_VALIDITY_MS: number | null = null;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i;
 const USERNAME_RE = /^[a-zA-Z0-9._-]{3,20}$/;
 
-
 //                    UTILIDADES
 
 async function generateSalt(): Promise<string> {
@@ -125,7 +124,6 @@ function isNetOnline(state: {
 }
 
 let cachedUidSync: string | null = null;
-
 
 //              CLASE PRINCIPAL: OfflineAuthService
 
@@ -199,12 +197,9 @@ export class OfflineAuthService {
         if (user.uid) {
           cachedUidSync = user.uid;
           await AsyncStorage.setItem(STORAGE_KEYS.CACHED_UID, user.uid);
-         
         }
       }
-    } catch (error) {
-
-    }
+    } catch (error) {}
   }
 
   destroy(): void {
@@ -213,11 +208,9 @@ export class OfflineAuthService {
     this.authStateListeners.clear();
     this.isInitialized = false;
     this.initializationPromise = null;
-
   }
 
-
-  //                    REGISTER 
+  //                    REGISTER
   async register(params: RegisterParams): Promise<RegisterResult> {
     const validation = this.validateRegisterParams(params);
     if (!validation.ok) {
@@ -265,14 +258,12 @@ export class OfflineAuthService {
 
     // ONLINE => Firebase real
     try {
-
-
       const cred = await createUserWithEmailAndPassword(auth, email, password);
 
       if (cred.user) {
         await updateProfile(cred.user, { displayName: fullName });
 
-        await setDoc(doc(db, "usuarios", cred.user.uid), {
+        await setDoc(doc(db, "users", cred.user.uid), {
           uid: cred.user.uid,
           email,
           fullName,
@@ -293,7 +284,6 @@ export class OfflineAuthService {
       };
     } catch (e: any) {
       const code = e?.code ?? "";
-
 
       let msg = "Ocurrió un error al crear tu cuenta. Intenta de nuevo.";
       if (code === "auth/email-already-in-use")
@@ -391,9 +381,7 @@ export class OfflineAuthService {
     return { ok: true };
   }
 
-
   //  REGISTER OFFLINE PENDING
-
 
   async registerOfflinePending(params: {
     email: string;
@@ -459,7 +447,6 @@ export class OfflineAuthService {
 
       return { success: true, tempUid };
     } catch (err: any) {
-
       return { success: false, error: "No se pudo crear el registro offline." };
     }
   }
@@ -490,7 +477,6 @@ export class OfflineAuthService {
 
       this.isFinalizingPending = true;
 
-
       if (auth.currentUser) {
         if ((auth.currentUser.email || "").toLowerCase() === pending.email) {
           await this.clearPendingRegistration();
@@ -507,7 +493,7 @@ export class OfflineAuthService {
 
       await updateProfile(cred.user, { displayName: pending.fullName });
 
-      await setDoc(doc(db, "usuarios", cred.user.uid), {
+      await setDoc(doc(db, "users", cred.user.uid), {
         uid: cred.user.uid,
         email: pending.email,
         fullName: pending.fullName,
@@ -531,10 +517,7 @@ export class OfflineAuthService {
       );
 
       await this.clearPendingRegistration();
-
-
     } catch (err: any) {
-
     } finally {
       this.isFinalizingPending = false;
     }
@@ -557,16 +540,12 @@ export class OfflineAuthService {
         await this.cacheUserFromFirebase(auth.currentUser);
         await this.cacheUserProfile(auth.currentUser.uid);
       }
-
-    } catch (err) {
-
-    }
+    } catch (err) {}
   }
 
   async signIn(email: string, password: string): Promise<OfflineAuthResult> {
     const trimmedEmail = (email || "").trim().toLowerCase();
     const pass = password || "";
-
 
     if (!trimmedEmail) {
       return {
@@ -619,8 +598,6 @@ export class OfflineAuthService {
     password: string
   ): Promise<OfflineAuthResult> {
     try {
-
-
       const result = await signInWithEmailAndPassword(auth, email, password);
       const user = result.user;
 
@@ -636,21 +613,16 @@ export class OfflineAuthService {
 
       const cachedUser = await this.getCachedUser();
 
-
-
       return {
         success: true,
         user: cachedUser!,
         isOffline: false,
       };
     } catch (error: any) {
-
-
       if (
         error.code === "auth/network-request-failed" ||
         error.code === "auth/internal-error"
       ) {
-
         return this.signInOffline(email, password);
       }
 
@@ -668,8 +640,6 @@ export class OfflineAuthService {
     password: string
   ): Promise<OfflineAuthResult> {
     try {
-
-
       const cached = await this.getCachedCredentials();
 
       if (!cached) {
@@ -712,7 +682,6 @@ export class OfflineAuthService {
         };
       }
 
-
       void OFFLINE_SESSION_VALIDITY_MS;
 
       await this.updateCredentialsLastUsed();
@@ -721,15 +690,12 @@ export class OfflineAuthService {
       cachedUidSync = cachedUser.uid;
       this.notifyAuthStateListeners(cachedUser);
 
-
-
       return {
         success: true,
         user: cachedUser,
         isOffline: true,
       };
     } catch (error: any) {
-
       return {
         success: false,
         isOffline: true,
@@ -753,10 +719,7 @@ export class OfflineAuthService {
       }
 
       this.notifyAuthStateListeners(null);
-
-    } catch (error) {
-
-    }
+    } catch (error) {}
   }
 
   // ==================== RESTORE FIREBASE SESSION ====================
@@ -764,18 +727,15 @@ export class OfflineAuthService {
   private async attemptFirebaseRestore(): Promise<void> {
     try {
       if (auth.currentUser) {
-
         return;
       }
 
       if (!this.isOnline) {
-
         return;
       }
 
       const pending = await this.getPendingRegistration();
       if (pending) {
-
         return;
       }
 
@@ -783,18 +743,13 @@ export class OfflineAuthService {
         STORAGE_KEYS.CACHED_PLAINTEXT_CREDS
       );
       if (!credsJson) {
-
         return;
       }
 
       const { email, password } = JSON.parse(credsJson);
 
-
       await signInWithEmailAndPassword(auth, email, password);
-
-    } catch (error: any) {
-
-    }
+    } catch (error: any) {}
   }
 
   // ==================== CACHÉ DE USUARIO ====================
@@ -822,16 +777,12 @@ export class OfflineAuthService {
 
       this.currentUser = cachedUser;
       this.notifyAuthStateListeners(cachedUser);
-
-
-    } catch (error) {
-
-    }
+    } catch (error) {}
   }
 
   private async cacheUserProfile(uid: string): Promise<void> {
     try {
-      const collectionsToTry = ["usuarios", "users"];
+      const collectionsToTry = ["users"];
       let profileData: Record<string, any> | null = null;
 
       for (const col of collectionsToTry) {
@@ -870,10 +821,7 @@ export class OfflineAuthService {
 
       this.currentUser = updatedUser;
       this.notifyAuthStateListeners(updatedUser);
-
-    } catch (error) {
-
-    }
+    } catch (error) {}
   }
 
   async getCachedUser(): Promise<CachedUser | null> {
@@ -881,7 +829,6 @@ export class OfflineAuthService {
       const data = await AsyncStorage.getItem(STORAGE_KEYS.CACHED_USER);
       return data ? JSON.parse(data) : null;
     } catch (error) {
-
       return null;
     }
   }
@@ -908,11 +855,7 @@ export class OfflineAuthService {
         STORAGE_KEYS.CACHED_CREDENTIALS,
         JSON.stringify(credentials)
       );
-
-
-    } catch (error) {
-
-    }
+    } catch (error) {}
   }
 
   private async getCachedCredentials(): Promise<CachedCredentials | null> {
@@ -934,9 +877,7 @@ export class OfflineAuthService {
           JSON.stringify(cached)
         );
       }
-    } catch (error) {
-
-    }
+    } catch (error) {}
   }
 
   // ==================== SESIÓN ====================
@@ -959,7 +900,6 @@ export class OfflineAuthService {
 
       return null;
     } catch (error) {
-
       return null;
     }
   }
@@ -976,11 +916,8 @@ export class OfflineAuthService {
         await auth.currentUser.reload();
         await this.cacheUserFromFirebase(auth.currentUser);
         await this.cacheUserProfile(auth.currentUser.uid);
-
       }
-    } catch (error) {
-
-    }
+    } catch (error) {}
   }
 
   // ==================== UTILIDADES ====================
@@ -996,10 +933,7 @@ export class OfflineAuthService {
       ]);
       this.currentUser = null;
       cachedUidSync = null;
-
-    } catch (error) {
-
-    }
+    } catch (error) {}
   }
 
   getCurrentUser(): CachedUser | null {
@@ -1041,9 +975,7 @@ export class OfflineAuthService {
           return user.uid;
         }
       }
-    } catch (error) {
-
-    }
+    } catch (error) {}
 
     return null;
   }

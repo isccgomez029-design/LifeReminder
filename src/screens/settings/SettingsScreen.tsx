@@ -4,7 +4,6 @@ import { View, Text, StyleSheet, ScrollView, Switch } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-
 const SETTINGS_KEY = "@lifereminder/settings";
 
 type HourFormat = "12" | "24";
@@ -44,9 +43,7 @@ const SettingsScreen: React.FC = () => {
         if (typeof saved.vibration === "boolean") {
           setVibration(saved.vibration);
         }
-      } catch (e) {
-
-      }
+      } catch (e) {}
     };
 
     loadSettings();
@@ -77,13 +74,8 @@ const SettingsScreen: React.FC = () => {
       if (partial.vibration !== undefined) {
         setVibration(partial.vibration);
       }
-
-    } catch (e) {
-
-    }
+    } catch (e) {}
   };
-
-
 
   return (
     <SafeAreaView style={styles.container}>

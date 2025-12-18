@@ -116,7 +116,7 @@ export async function sendImmediateNotification(
     });
 
   } catch (error) {
-    console.error("Error enviando notificación inmediata:", error);
+
   }
 }
 
@@ -172,7 +172,7 @@ export async function scheduleAppointmentReminder(
     } catch (e) {   
     }
   } catch (err) {
-    console.error("Error programando recordatorio de cita:", err);
+
   }
 }
 
@@ -226,7 +226,7 @@ export function listenCaregiverNotifications(
       onData(list);
     },
     (error) => {
-      console.error("Error cargando notificaciones:", error);
+
       onError?.(error);
     }
   );
@@ -243,7 +243,7 @@ export async function markNotificationAsRead(
     const notifRef = doc(db, "users", userId, "notifications", notificationId);
     await updateDoc(notifRef, { read: true });
   } catch (error) {
-    console.error("Error marcando notificación como leída:", error);
+
     throw error;
   }
 }
@@ -262,7 +262,7 @@ export async function markMultipleAsRead(
     await Promise.all(promises);
 
   } catch (error) {
-    console.error("Error marcando múltiples notificaciones:", error);
+
     throw error;
   }
 }
@@ -369,7 +369,7 @@ export async function notifyCaregiversAboutAppointmentReminder(params: {
 
     return { success: true, notifiedCount };
   } catch (error: any) {
-    console.error("❌ Error notificando cita a cuidadores:", error);
+
     return { success: false, notifiedCount: 0, error: error?.message };
   }
 }
@@ -452,7 +452,7 @@ export async function notifyCaregiversAboutNoncompliance(params: {
 
     return { success: true, notifiedCount };
   } catch (error: any) {
-    console.error("❌ Error notificando a cuidadores:", error);
+
     return { success: false, notifiedCount: 0, error: error?.message };
   }
 }
@@ -558,7 +558,7 @@ export async function notifyCaregiversAboutDismissal(params: {
 
     return { success: true, notifiedCount };
   } catch (error: any) {
-    console.error("❌ Error notificando descarte a cuidadores:", error);
+
     return { success: false, notifiedCount: 0, error: error?.message };
   }
 }
@@ -597,7 +597,7 @@ export async function logSnoozeEvent(params: {
     });
 
   } catch (error) {
-    console.error("❌ Error registrando evento de posposición:", error);
+
   }
 }
 
@@ -628,7 +628,7 @@ export async function logDismissalEvent(params: {
 
 
   } catch (error) {
-    console.error("❌ Error registrando evento de descarte:", error);
+
   }
 }
 
@@ -658,7 +658,7 @@ export async function logComplianceSuccess(params: {
 
 
   } catch (error) {
-    console.error("❌ Error registrando cumplimiento:", error);
+
   }
 }
 

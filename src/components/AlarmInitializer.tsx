@@ -81,7 +81,7 @@ export function AlarmInitializer() {
   const maintenanceInterval = useRef<NodeJS.Timeout | undefined>(undefined); // Referencia al setInterval para luego limpiarlo
   const lastMaintenanceTime = useRef<number>(0); // Marca de tiempo del último mantenimiento ejecutado
 
-  // ✅ Throttle para no reprogramar a lo loco
+  //  Throttle para no reprogramar a lo loco
   const lastEnsureTime = useRef<number>(0); // Última vez que se ejecutó ensureUpcomingAlarms
   const ensuringRef = useRef<boolean>(false); // “Lock” para evitar ejecuciones simultáneas
 
@@ -90,7 +90,7 @@ export function AlarmInitializer() {
     auth.currentUser?.uid || offlineAuthService.getCurrentUid(); // Usa Firebase si existe, si no usa sesión offline
 
   /**
-   * ✅ Garantiza que TODA próxima alarma (nextDueAt futura) tenga
+   *  Garantiza que TODA próxima alarma (nextDueAt futura) tenga
    * una notificación local REAL programada.
    */
   const ensureUpcomingAlarms = async () => {
@@ -312,7 +312,7 @@ export function AlarmInitializer() {
           try {
             await offlineAlarmService.initialize(); // Re-inicializa alarmas al volver (por seguridad)
 
-            // ✅ al volver a foreground, re-asegurar alarmas
+            //  al volver a foreground, re-asegurar alarmas
             await ensureUpcomingAlarms(); // Repara alarmas futuras al regresar
 
             const now = Date.now(); // Tiempo actual

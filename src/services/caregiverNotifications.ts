@@ -109,7 +109,7 @@ export async function notifyCaregiversAboutNoncompliance(params: {
 
     return { success: true, notifiedCount };
   } catch (error: any) {
-    console.error("❌ Error notificando a cuidadores:", error);
+
     return { success: false, notifiedCount: 0, error: error?.message };
   }
 }
@@ -229,7 +229,7 @@ export async function notifyCaregiversAboutDismissal(params: {
 
     return { success: true, notifiedCount };
   } catch (error: any) {
-    console.error("❌ Error notificando descarte a cuidadores:", error);
+
     return { success: false, notifiedCount: 0, error: error?.message };
   }
 }
@@ -309,7 +309,7 @@ export async function logDismissalEvent(params: {
 
 
   } catch (error) {
-    console.error("❌ Error registrando evento de descarte:", error);
+
   }
 }
 
@@ -343,6 +343,6 @@ export async function logComplianceSuccess(params: {
 
 
   } catch (error) {
-    console.error("❌ Error registrando cumplimiento:", error);
+
   }
 }

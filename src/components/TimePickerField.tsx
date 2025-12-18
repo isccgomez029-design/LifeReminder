@@ -61,13 +61,13 @@ function formatForDisplay(hhmm?: string, mode: "point" | "interval" = "point") {
   const m = parseInt(mStr, 10); // Convierte minutos a número
 
   if (mode === "interval") {
-    // 🟢 Modo intervalo: siempre se muestra en formato 24h (HH:MM)
+    //  Modo intervalo: siempre se muestra en formato 24h (HH:MM)
     const hh = isNaN(h) ? 0 : h;
     const mm = isNaN(m) ? 0 : m;
     return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
   }
 
-  // 🟢 Modo hora puntual: se muestra en formato 12h con am/pm
+  //  Modo hora puntual: se muestra en formato 12h con am/pm
   const d = new Date(); // Fecha base
   d.setHours(
     isNaN(h) ? 0 : h, // Hora
@@ -136,7 +136,6 @@ const TimePickerField: React.FC<Props> = ({
           value={pickerDate}
           mode="time"
           display="spinner"
-          // 🟢 Para intervalos usamos 24h (permite 00:30 sin am/pm)
           is24Hour={mode === "interval"}
           onChange={handleChange}
         />

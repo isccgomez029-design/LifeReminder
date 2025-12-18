@@ -1,6 +1,4 @@
 // App.tsx
-
-
 import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
@@ -12,11 +10,11 @@ import StackNavigator from "./src/navigation/StackNavigator";
 import { configureNotificationPermissions } from "./src/services/Notifications";
 import { navigationRef } from "./src/navigation/navigationRef";
 
-// 🔹 Servicios Offline
+// Servicios Offline
 import { offlineAuthService } from "./src/services/offline/OfflineAuthService";
 import { syncQueueService } from "./src/services/offline/SyncQueueService";
 
-// 🔹 Contexto de conectividad
+//  Contexto de conectividad
 import { OfflineProvider } from "./src/context/OfflineContext";
 import { auth } from "./src/config/firebaseConfig";
 import { offlineAlarmService } from "./src/services/offline/OfflineAlarmService";
@@ -26,6 +24,8 @@ import {
   cleanupArchivedItemAlarms,
 } from "./src/services/alarmValidator";
 import { AlarmInitializer } from "./src/components/AlarmInitializer";
+
+import type { RootStackParamList } from "./src/navigation/StackNavigator";
 
 const COLORS = {
   primary: "#6366F1",
@@ -37,28 +37,38 @@ export default function App() {
   const [isInitializing, setIsInitializing] = useState(true);
   const [initError, setInitError] = useState<string | null>(null);
 
+  //  RUTA INICIAL DINÁMICA
+  const [initialRoute, setInitialRoute] =
+    useState<keyof RootStackParamList>("Login");
+
   useEffect(() => {
     let isMounted = true;
 
     const initializeApp = async () => {
       try {
-
+        // Permisos de notificaciones
         await configureNotificationPermissions();
 
+        //  Inicializar auth offline-first
         const cachedUser = await offlineAuthService.initialize();
 
+        //  Inicializar cola offline
         await syncQueueService.initialize();
 
-        // INSTRUCCIÓN 2: Inicializar Sistema de Alarmas
+        //  Inicializar sistema de alarmas
         await offlineAlarmService.initialize();
 
         await performAlarmMaintenance();
 
+        //  DECISIÓN DE ARRANQUE
         if (cachedUser) {
+          setInitialRoute("Home");
           await syncQueueService.debugCache(cachedUser.uid);
+        } else {
+          setInitialRoute("Login");
         }
 
-        // INSTRUCCIÓN 4: LIMPIAR ALARMAS HUÉRFANAS
+        //  Limpiar alarmas huérfanas
         const userId =
           auth.currentUser?.uid || offlineAuthService.getCurrentUid();
 
@@ -66,11 +76,11 @@ export default function App() {
           await cleanupArchivedItemAlarms(userId);
         }
 
-        const netState = await NetInfo.fetch();
+        // (solo para forzar evaluación inicial de red)
+        await NetInfo.fetch();
 
         if (isMounted) setIsInitializing(false);
       } catch (error: any) {
-        console.error("❌ Error inicializando app:", error);
         if (isMounted) {
           setInitError(error.message || "Error de inicialización");
           setIsInitializing(false);
@@ -80,33 +90,31 @@ export default function App() {
 
     initializeApp();
 
-    //  INSTRUCCIÓN 3: Listener modificado (response / background)
+    // Listener: notificación tocada (background)
     const responseListener =
       Notifications.addNotificationResponseReceivedListener(
         async (response) => {
           const data = response.notification.request.content.data;
 
           if (data?.screen === "Alarm") {
-            const { shouldShow, reason } = await shouldShowAlarm(data);
-
+            const { shouldShow } = await shouldShowAlarm(data);
             if (shouldShow) {
               (navigationRef.current as any)?.navigate("Alarm", data.params);
-            } 
+            }
           }
         }
       );
 
-    //  Listener foreground
+    // Listener: notificación recibida (foreground)
     const notificationListener = Notifications.addNotificationReceivedListener(
       async (notification) => {
         const data = notification.request.content.data;
 
         if (data?.screen === "Alarm") {
-          const { shouldShow, reason } = await shouldShowAlarm(data);
-
+          const { shouldShow } = await shouldShowAlarm(data);
           if (shouldShow) {
             (navigationRef.current as any)?.navigate("Alarm", data.params);
-          } 
+          }
         }
       }
     );
@@ -121,6 +129,7 @@ export default function App() {
     };
   }, []);
 
+  //  Splash / loading
   if (isInitializing) {
     return (
       <View style={styles.loadingContainer}>
@@ -130,6 +139,7 @@ export default function App() {
     );
   }
 
+  //  Error de arranque
   if (initError) {
     return (
       <View style={styles.errorContainer}>
@@ -143,13 +153,13 @@ export default function App() {
     );
   }
 
-  // INSTRUCCIÓN 4: Agregar AlarmInitializer en el Return
+  // APP NORMAL
   return (
     <OfflineProvider>
       <SafeAreaProvider>
         <NavigationContainer ref={navigationRef}>
           <AlarmInitializer />
-          <StackNavigator />
+          <StackNavigator initialRoute={initialRoute} />
         </NavigationContainer>
       </SafeAreaProvider>
     </OfflineProvider>

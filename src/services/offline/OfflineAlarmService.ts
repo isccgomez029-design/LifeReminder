@@ -88,7 +88,7 @@ class OfflineAlarmService {
         this.initialized = true;
 
       } catch (error) {
-        console.error("❌ Error inicializando OfflineAlarmService:", error);
+
       } finally {
         this.initializing = null;
       }
@@ -110,7 +110,7 @@ class OfflineAlarmService {
 
 
     } catch (error) {
-      console.error("❌ Error cargando alarmas:", error);
+
     }
   }
 
@@ -120,7 +120,7 @@ class OfflineAlarmService {
       await AsyncStorage.setItem(ALARM_METADATA_KEY, JSON.stringify(data));
 
     } catch (error) {
-      console.error("❌ Error guardando alarmas:", error);
+
     }
   }
 
@@ -145,8 +145,7 @@ class OfflineAlarmService {
 
       }
     } catch (error) {
-      console.error("⚠️ Error reconciliando notificaciones:", error);
-      // IMPORTANTE: no lanzamos error para no romper flujo offline
+
     }
   }
 
@@ -185,7 +184,7 @@ class OfflineAlarmService {
         trigger: this.makeDateTrigger(args.triggerDate),
       });
     } catch (e) {
-      console.warn("⚠️ DATE trigger falló, usando TIME_INTERVAL fallback");
+
     }
 
     // 2) fallback TIME_INTERVAL
@@ -218,7 +217,7 @@ class OfflineAlarmService {
 
     try {
       if (!isValidFutureDate(triggerDate)) {
-        console.warn("⚠️ Fecha inválida/pasada, no se programa:", triggerDate);
+
         return {
           notificationId: null,
           metadata: null,
@@ -299,7 +298,7 @@ class OfflineAlarmService {
 
       return { notificationId, metadata, success: true };
     } catch (error: any) {
-      console.error("❌ Error programando alarma medicamento:", error);
+
       return {
         notificationId: null,
         metadata: null,
@@ -329,7 +328,7 @@ class OfflineAlarmService {
 
     try {
       if (!isValidFutureDate(triggerDate)) {
-        console.warn("⚠️ Fecha inválida/pasada, no se programa:", triggerDate);
+
         return {
           notificationId: null,
           metadata: null,
@@ -398,7 +397,7 @@ class OfflineAlarmService {
 
       return { notificationId, metadata, success: true };
     } catch (error: any) {
-      console.error("❌ Error programando alarma hábito:", error);
+
       return {
         notificationId: null,
         metadata: null,
@@ -416,8 +415,7 @@ class OfflineAlarmService {
     try {
       await Notifications.cancelScheduledNotificationAsync(notificationId);
     } catch (e) {
-      // si falla, igual limpiamos metadata local para no “romper” UI
-      console.warn("⚠️ No se pudo cancelar en Expo, limpiando local:", e);
+
     }
 
     this.alarms.delete(notificationId);
@@ -475,7 +473,7 @@ class OfflineAlarmService {
     try {
       await Notifications.cancelAllScheduledNotificationsAsync();
     } catch (e) {
-      console.warn("⚠️ cancelAllScheduledNotificationsAsync falló:", e);
+
     }
 
     this.alarms.clear();
@@ -582,7 +580,7 @@ class OfflineAlarmService {
         snoozeCount: 0,
       });
     } catch (error: any) {
-      console.error("❌ Error programando siguiente alarma:", error);
+
       return {
         notificationId: null,
         metadata: null,
@@ -671,7 +669,7 @@ class OfflineAlarmService {
             errors++;
           }
         } catch (err) {
-          console.error(`❌ Error reprogramando ${med.nombre}:`, err);
+
           errors++;
         }
       }

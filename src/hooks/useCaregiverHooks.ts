@@ -1,5 +1,5 @@
 // src/hooks/useCaregiverHooks.ts
-// Hooks especializados para pantallas de cuidadores
+
 
 import { useState, useEffect, useCallback } from "react";
 import { auth } from "../config/firebaseConfig";
@@ -21,7 +21,7 @@ import {
 } from "../services/careNetworkService";
 
 /* ============================================================
- *            🔔 HOOK: useCareg iverNotifications
+ *            HOOK: useCaregiverNotifications
  * ============================================================ */
 
 export interface UseCaregiverNotificationsResult {
@@ -58,7 +58,6 @@ export function useCaregiverNotifications(): UseCaregiverNotificationsResult {
         setRefreshing(false);
       },
       (error) => {
-        console.error("Error en notificaciones:", error);
         setLoading(false);
         setRefreshing(false);
       }
@@ -78,7 +77,6 @@ export function useCaregiverNotifications(): UseCaregiverNotificationsResult {
       try {
         await markNotificationAsRead(userId, notifId);
       } catch (error) {
-        console.error("Error marcando notificación:", error);
       }
     },
     [userId]
@@ -97,7 +95,7 @@ export function useCaregiverNotifications(): UseCaregiverNotificationsResult {
 }
 
 /* ============================================================
- *              📩 HOOK: useCareInvites
+ *               HOOK: useCareInvites (CORREGIDO)
  * ============================================================ */
 
 export interface UseCareInvitesResult {
@@ -108,7 +106,7 @@ export interface UseCareInvitesResult {
 }
 
 /**
- * Hook para gestionar invitaciones de cuidado
+ Hook para gestionar invitaciones de cuidado
  */
 export function useCareInvites(): UseCareInvitesResult {
   const [invites, setInvites] = useState<CareInvite[]>([]);
@@ -125,6 +123,7 @@ export function useCareInvites(): UseCareInvitesResult {
       return;
     }
 
+
     const unsubscribe = listenCareInvites(
       userId,
       (data) => {
@@ -132,7 +131,7 @@ export function useCareInvites(): UseCareInvitesResult {
         setLoading(false);
       },
       (error) => {
-        console.error("Error en invitaciones:", error);
+
         setLoading(false);
       }
     );
@@ -140,23 +139,40 @@ export function useCareInvites(): UseCareInvitesResult {
     return unsubscribe;
   }, [userId]);
 
-  const acceptInvite = useCallback(async (inviteId: string) => {
-    try {
-      await acceptCareInvite(inviteId);
-    } catch (error) {
-      console.error("Error aceptando invitación:", error);
-      throw error;
-    }
-  }, []);
 
-  const rejectInvite = useCallback(async (inviteId: string) => {
-    try {
-      await rejectCareInvite(inviteId);
-    } catch (error) {
-      console.error("Error rechazando invitación:", error);
-      throw error;
-    }
-  }, []);
+  const acceptInvite = useCallback(
+    async (inviteId: string) => {
+      try {
+        const invite = invites.find((i) => i.id === inviteId);
+        if (!invite) {
+          throw new Error("Invitación no encontrada");
+        }
+
+        await acceptCareInvite(inviteId, invite.patientUid);
+      } catch (error) {
+
+        throw error;
+      }
+    },
+    [invites]
+  );
+
+  const rejectInvite = useCallback(
+    async (inviteId: string) => {
+      try {
+        const invite = invites.find((i) => i.id === inviteId);
+        if (!invite) {
+          throw new Error("Invitación no encontrada");
+        }
+
+        await rejectCareInvite(inviteId, invite.patientUid);
+      } catch (error) {
+
+        throw error;
+      }
+    },
+    [invites]
+  );
 
   return {
     invites,
@@ -206,7 +222,7 @@ export function useMyPatients(): UseMyPatientsResult {
         setProfilePhotos(photos);
       },
       (error) => {
-        console.error("Error en pacientes:", error);
+
         setLoading(false);
       }
     );
